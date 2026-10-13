@@ -1,0 +1,6 @@
+{
+  "name": "KisanDr - AI Crop Disease Scanner & Voice Assistant",
+  "description": "Instant crop disease detection from plant photos with localized seasonal agricultural advice and real-time multi-language AI voice assistant.",
+  "requestFramePermissions": ["camera", "microphone", "geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

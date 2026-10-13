@@ -1,0 +1,60 @@
+import { VoiceLanguage } from '../types.ts';
+
+export const SUPPORTED_LANGUAGES: VoiceLanguage[] = [
+  {
+    id: 'english',
+    name: 'English',
+    nativeName: 'English',
+    code: 'en-IN',
+    greeting: 'Namaste! I am your AI Agri-Doctor. Ask me anything about your crop diagnosis.',
+    sampleQuestion: 'What disease does my plant have and how do I treat it?',
+  },
+  {
+    id: 'hindi',
+    name: 'Hindi',
+    nativeName: 'हिन्दी',
+    code: 'hi-IN',
+    greeting: 'नमस्ते किसान भाई! मैं आपका फसल डॉक्टर हूँ। अपनी फसल के बारे में कुछ भी पूछें।',
+    sampleQuestion: 'मेरी फसल में कौन सी बीमारी है और इसका क्या इलाज है?',
+  },
+  {
+    id: 'kannada',
+    name: 'Kannada',
+    nativeName: 'ಕನ್ನಡ',
+    code: 'kn-IN',
+    greeting: 'ನಮಸ್ಕಾರ ರೈತ ಮಿತ್ರರೇ! ನಿಮ್ಮ ಬೆಳೆಯ ರೋಗ ನಿರ್ವಹಣೆಗೆ ನಾನು ಇಲ್ಲಿದ್ದೇನೆ. ಏನಾದರೂ ಕೇಳಿ.',
+    sampleQuestion: 'ನನ್ನ ಬೆಳೆಗೆ ಯಾವ ರೋಗ ಬಂದಿದೆ? ತಕ್ಷಣ ಏನು ಮಾಡಬೇಕು?',
+  },
+  {
+    id: 'telugu',
+    name: 'Telugu',
+    nativeName: 'తెలుగు',
+    code: 'te-IN',
+    greeting: 'నమస్కారం రైతు సోదరులారా! మీ పంట తెగుళ్ల నివారణ కోసం నన్ను ఏదైనా అడగవచ్చు.',
+    sampleQuestion: 'నా పంటకు ఏ తెగులు సోకింది? నివారణ మార్గాలు ఏమిటి?',
+  },
+  {
+    id: 'tamil',
+    name: 'Tamil',
+    nativeName: 'தமிழ்',
+    code: 'ta-IN',
+    greeting: 'வணக்கம் விவசாய நண்பரே! உங்கள் பயிர் நோய் மற்றும் தீர்வு பற்றி என்னிடம் கேளுங்கள்.',
+    sampleQuestion: 'என் பயிரில் என்ன நோய் உள்ளது? அதை எப்படி குணப்படுத்துவது?',
+  },
+  {
+    id: 'marathi',
+    name: 'Marathi',
+    nativeName: 'मराठी',
+    code: 'mr-IN',
+    greeting: 'नमस्कार शेतकरी मित्र! मी आपला पीक सल्लागार आहे. आपल्या पिकाबद्दल काहीही विचारा.',
+    sampleQuestion: 'माझ्या पिकाला कोणता रोग झाला आहे आणि त्यावर काय उपाय करावा?',
+  },
+  {
+    id: 'bengali',
+    name: 'Bengali',
+    nativeName: 'বাংলা',
+    code: 'bn-IN',
+    greeting: 'নমস্কার কৃষক বন্ধু! আপনার ফসলের রোগ ও সমাধান সম্পর্কে যেকোনো প্রশ্ন করতে পারেন।',
+    sampleQuestion: 'আমার ফসলে কী রোগ হয়েছে এবং এর সঠিক চিকিৎসা কী?',
+  },
+];
