@@ -6,7 +6,7 @@ import { VoiceAssistantModal } from './components/VoiceAssistantModal.tsx';
 import { LocationContext, CropAnalysisResult, VoiceLanguage } from './types.ts';
 import { SUPPORTED_LANGUAGES } from './utils/languages.ts';
 import { detectUserLocation } from './utils/location.ts';
-import { Home, Camera, Mic, MapPin, AlertCircle } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 
 export default function App() {
   const [location, setLocation] = useState<LocationContext | null>(null);
@@ -17,7 +17,6 @@ export default function App() {
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isVoiceModalOpen, setIsVoiceModalOpen] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<'home' | 'scan' | 'voice' | 'location'>('home');
 
   const handleDetectLocation = async () => {
     setIsDetectingLocation(true);
@@ -81,8 +80,8 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#E5ECE5] flex items-center justify-center font-sans selection:bg-emerald-200">
-      {/* Responsive App Shell: Fullscreen on mobile, centered mobile container on desktop */}
-      <div className="w-full sm:max-w-md min-h-screen sm:min-h-[820px] sm:max-h-[95vh] bg-[#F3F7F3] sm:rounded-[36px] sm:shadow-2xl sm:border sm:border-emerald-900/10 flex flex-col overflow-hidden relative">
+      {/* Responsive App Container */}
+      <div className="w-full sm:max-w-md min-h-screen sm:min-h-[800px] sm:max-h-[95vh] bg-[#F3F7F3] sm:rounded-[36px] sm:shadow-2xl sm:border sm:border-emerald-900/10 flex flex-col overflow-hidden relative">
         {/* Header */}
         <Header
           location={location}
@@ -93,7 +92,7 @@ export default function App() {
         />
 
         {/* Scrollable Screen Content */}
-        <div className="flex-1 overflow-y-auto px-4 py-2 pb-24 space-y-4">
+        <div className="flex-1 overflow-y-auto px-4 py-2 pb-6 space-y-4">
           {/* Error Banner */}
           {errorMessage && (
             <div className="p-3 bg-red-50 border border-red-200 rounded-2xl flex items-start gap-2.5 text-red-700 text-xs shadow-sm">
@@ -117,7 +116,6 @@ export default function App() {
               isAnalyzing={isAnalyzing}
               location={location}
               onRequestLocation={handleDetectLocation}
-              onOpenVoice={() => setIsVoiceModalOpen(true)}
             />
           ) : (
             scannedImage && (
@@ -131,58 +129,6 @@ export default function App() {
               />
             )
           )}
-        </div>
-
-        {/* Floating Bottom Nav Dock (Exactly matching Screen 2 in reference image) */}
-        <div className="absolute bottom-4 inset-x-4 z-30 pointer-events-auto">
-          <div className="bg-[#1C3E2D] text-white rounded-full p-1.5 shadow-xl flex items-center justify-around border border-emerald-900/60 backdrop-blur-md">
-            {/* Home Tab */}
-            <button
-              onClick={() => {
-                setActiveTab('home');
-                handleScanAnother();
-              }}
-              className={`flex items-center gap-1.5 px-4 py-2.5 rounded-full text-xs font-bold transition-all ${
-                activeTab === 'home' && !analysisResult
-                  ? 'bg-emerald-600/80 text-white shadow-sm'
-                  : 'text-emerald-200/80 hover:text-white'
-              }`}
-            >
-              <Home className="w-4 h-4" />
-              <span>HOME</span>
-            </button>
-
-            {/* Quick Scan Action */}
-            <button
-              onClick={() => {
-                setActiveTab('scan');
-                handleScanAnother();
-              }}
-              className="w-10 h-10 rounded-full bg-white text-emerald-900 flex items-center justify-center shadow-sm active:scale-90 transition-transform"
-              title="Camera Scan"
-            >
-              <Camera className="w-4 h-4 text-emerald-800" />
-            </button>
-
-            {/* Voice AI */}
-            <button
-              onClick={() => setIsVoiceModalOpen(true)}
-              className="flex items-center gap-1 px-3 py-2 rounded-full text-xs font-semibold text-emerald-200/80 hover:text-white"
-              title="Talk to AI"
-            >
-              <Mic className="w-4 h-4 text-emerald-300 animate-pulse" />
-              <span className="hidden sm:inline">VOICE</span>
-            </button>
-
-            {/* Location / Season */}
-            <button
-              onClick={handleDetectLocation}
-              className="p-2.5 rounded-full text-emerald-200/80 hover:text-white"
-              title="Refresh Location Context"
-            >
-              <MapPin className="w-4 h-4" />
-            </button>
-          </div>
         </div>
 
         {/* Voice Assistant Modal */}

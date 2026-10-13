@@ -1,26 +1,24 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   Camera,
-  Upload,
+  Image as ImageIcon,
   SwitchCamera,
   X,
   Scan,
   Sparkles,
   ArrowRight,
   Search,
-  Mic,
-  SunMedium,
-  CheckCircle,
+  CheckCircle2,
 } from 'lucide-react';
 import { LocationContext } from '../types.ts';
 import { SAMPLE_CROPS, SampleCrop, rasterizeSvgToPngDataUrl } from '../utils/sampleCrops.ts';
+import { compressImage } from '../utils/imageCompress.ts';
 
 interface CropScannerProps {
   onAnalyze: (imageBase64: string, mimeType: string) => void;
   isAnalyzing: boolean;
   location: LocationContext | null;
   onRequestLocation: () => void;
-  onOpenVoice: () => void;
 }
 
 export const CropScanner: React.FC<CropScannerProps> = ({
@@ -28,7 +26,6 @@ export const CropScanner: React.FC<CropScannerProps> = ({
   isAnalyzing,
   location,
   onRequestLocation,
-  onOpenVoice,
 }) => {
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [imageMimeType, setImageMimeType] = useState<string>('image/jpeg');
@@ -36,10 +33,14 @@ export const CropScanner: React.FC<CropScannerProps> = ({
   const [cameraFacing, setCameraFacing] = useState<'environment' | 'user'>('environment');
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [isCompressing, setIsCompressing] = useState<boolean>(false);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  // Pure gallery / file manager input (NO capture="environment")
+  const galleryInputRef = useRef<HTMLInputElement | null>(null);
+  // Native camera app fallback input
+  const nativeCameraInputRef = useRef<HTMLInputElement | null>(null);
 
   // Stop camera stream cleanly
   const stopCamera = () => {
@@ -56,15 +57,25 @@ export const CropScanner: React.FC<CropScannerProps> = ({
     };
   }, []);
 
+  // Ensure video element gets the stream as soon as it mounts in the DOM
+  useEffect(() => {
+    if (isCameraActive && videoRef.current && mediaStreamRef.current) {
+      videoRef.current.srcObject = mediaStreamRef.current;
+      videoRef.current.play().catch((err) => console.warn('Video play error:', err));
+    }
+  }, [isCameraActive]);
+
   // Start device camera
   const startCamera = async (facing: 'environment' | 'user' = cameraFacing) => {
     stopCamera();
     setCameraError(null);
-    try {
-      if (!location) {
-        onRequestLocation();
-      }
+    setIsCameraActive(true);
 
+    if (!location) {
+      onRequestLocation();
+    }
+
+    try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: { ideal: facing },
@@ -75,17 +86,16 @@ export const CropScanner: React.FC<CropScannerProps> = ({
       });
 
       mediaStreamRef.current = stream;
-      setIsCameraActive(true);
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        videoRef.current.play();
+        videoRef.current.play().catch(() => {});
       }
     } catch (err: any) {
-      console.warn('Camera access error:', err);
-      setCameraError('Camera unavailable. Please upload a photo.');
+      console.warn('Live camera stream error:', err);
+      setCameraError('Live viewfinder unavailable in this browser. Opening device camera.');
       setIsCameraActive(false);
-      fileInputRef.current?.click();
+      nativeCameraInputRef.current?.click();
     }
   };
 
@@ -95,8 +105,8 @@ export const CropScanner: React.FC<CropScannerProps> = ({
     startCamera(nextFacing);
   };
 
-  // Capture photo
-  const capturePhoto = () => {
+  // Capture photo from video feed and compress
+  const capturePhoto = async () => {
     if (!videoRef.current) return;
     const video = videoRef.current;
     const canvas = document.createElement('canvas');
@@ -107,15 +117,25 @@ export const CropScanner: React.FC<CropScannerProps> = ({
     if (!ctx) return;
 
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+    const rawDataUrl = canvas.toDataURL('image/jpeg', 0.9);
 
-    setPreviewImage(dataUrl);
-    setImageMimeType('image/jpeg');
     stopCamera();
+    setIsCompressing(true);
+
+    try {
+      const compressed = await compressImage(rawDataUrl, 1280, 0.82);
+      setPreviewImage(compressed.dataUrl);
+      setImageMimeType('image/jpeg');
+    } catch {
+      setPreviewImage(rawDataUrl);
+      setImageMimeType('image/jpeg');
+    } finally {
+      setIsCompressing(false);
+    }
   };
 
-  // Upload file
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle uploaded file from gallery/file manager and compress
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -123,20 +143,31 @@ export const CropScanner: React.FC<CropScannerProps> = ({
       onRequestLocation();
     }
 
-    const mime = file.type || 'image/jpeg';
-    setImageMimeType(mime);
+    setIsCompressing(true);
+    stopCamera();
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      if (event.target?.result) {
-        setPreviewImage(event.target.result as string);
-        stopCamera();
-      }
-    };
-    reader.readAsDataURL(file);
+    try {
+      const compressed = await compressImage(file, 1280, 0.82);
+      setPreviewImage(compressed.dataUrl);
+      setImageMimeType('image/jpeg');
+    } catch (err) {
+      console.warn('Compression error, loading raw file:', err);
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        if (event.target?.result) {
+          setPreviewImage(event.target.result as string);
+          setImageMimeType(file.type || 'image/jpeg');
+        }
+      };
+      reader.readAsDataURL(file);
+    } finally {
+      setIsCompressing(false);
+      // reset input value so user can select same file again if desired
+      e.target.value = '';
+    }
   };
 
-  // Select sample specimen
+  // Handle sample specimen click
   const handleSelectSample = async (sample: SampleCrop) => {
     if (!location) {
       onRequestLocation();
@@ -159,9 +190,18 @@ export const CropScanner: React.FC<CropScannerProps> = ({
 
   return (
     <div className="space-y-4">
-      {/* Hidden file input */}
+      {/* 1. File Manager / Photo Gallery Input (NO capture attribute: opens photo gallery/file manager) */}
       <input
-        ref={fileInputRef}
+        ref={galleryInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleFileChange}
+        className="hidden"
+      />
+
+      {/* 2. Direct Device Camera Shutter Fallback Input */}
+      <input
+        ref={nativeCameraInputRef}
         type="file"
         accept="image/*"
         capture="environment"
@@ -169,11 +209,12 @@ export const CropScanner: React.FC<CropScannerProps> = ({
         className="hidden"
       />
 
-      {/* Camera Viewfinder (Matches Screen 3 with neon brackets) */}
+      {/* Camera Live Viewfinder Feed */}
       {isCameraActive && (
         <div className="relative rounded-[32px] overflow-hidden bg-black aspect-[3/4] max-h-[560px] mx-auto shadow-lg flex flex-col justify-between">
           <video
             ref={videoRef}
+            autoPlay
             playsInline
             muted
             className="absolute inset-0 w-full h-full object-cover"
@@ -187,8 +228,8 @@ export const CropScanner: React.FC<CropScannerProps> = ({
             >
               <X className="w-5 h-5" />
             </button>
-            <span className="font-bold text-sm tracking-wide bg-black/40 backdrop-blur-md px-3.5 py-1 rounded-full">
-              AI Plant Scan
+            <span className="font-bold text-xs tracking-wide bg-black/40 backdrop-blur-md px-3.5 py-1.5 rounded-full">
+              Live Camera Feed
             </span>
             <button
               onClick={toggleCameraFacing}
@@ -198,44 +239,51 @@ export const CropScanner: React.FC<CropScannerProps> = ({
             </button>
           </div>
 
-          {/* Center Scan Reticle (Exactly matching the reference image's green rounded corners) */}
+          {/* Center Scan Reticle (Neon green rounded brackets) */}
           <div className="relative z-10 flex-1 flex items-center justify-center pointer-events-none p-8">
             <div className="w-64 h-64 relative">
-              {/* Top-left */}
               <div className="absolute top-0 left-0 w-12 h-12 border-t-4 border-l-4 border-[#86EFAC] rounded-tl-3xl shadow-[0_0_12px_rgba(134,239,172,0.6)]" />
-              {/* Top-right */}
               <div className="absolute top-0 right-0 w-12 h-12 border-t-4 border-r-4 border-[#86EFAC] rounded-tr-3xl shadow-[0_0_12px_rgba(134,239,172,0.6)]" />
-              {/* Bottom-left */}
               <div className="absolute bottom-0 left-0 w-12 h-12 border-b-4 border-l-4 border-[#86EFAC] rounded-bl-3xl shadow-[0_0_12px_rgba(134,239,172,0.6)]" />
-              {/* Bottom-right */}
               <div className="absolute bottom-0 right-0 w-12 h-12 border-b-4 border-r-4 border-[#86EFAC] rounded-br-3xl shadow-[0_0_12px_rgba(134,239,172,0.6)]" />
             </div>
           </div>
 
-          {/* Bottom Shutter Action */}
-          <div className="relative z-10 p-6 flex items-center justify-center bg-gradient-to-t from-black/60 to-transparent">
+          {/* Bottom Shutter Controls */}
+          <div className="relative z-10 p-6 flex flex-col items-center gap-3 bg-gradient-to-t from-black/70 to-transparent">
             <button
               onClick={capturePhoto}
-              className="w-18 h-18 rounded-full border-4 border-white flex items-center justify-center bg-white/30 backdrop-blur-sm active:scale-90 transition-transform"
+              className="w-18 h-18 rounded-full border-4 border-white flex items-center justify-center bg-white/30 backdrop-blur-sm active:scale-90 transition-transform cursor-pointer"
             >
               <div className="w-13 h-13 rounded-full bg-white" />
+            </button>
+            <button
+              onClick={() => {
+                stopCamera();
+                galleryInputRef.current?.click();
+              }}
+              className="text-xs text-white/80 hover:text-white underline"
+            >
+              Or upload from photo gallery
             </button>
           </div>
         </div>
       )}
 
-      {/* Analyzing Loading View */}
-      {isAnalyzing && (
+      {/* Analyzing or Compressing Loading State */}
+      {(isAnalyzing || isCompressing) && (
         <div className="bg-white rounded-[32px] p-8 text-center shadow-sm border border-emerald-100 space-y-4">
           <div className="w-16 h-16 mx-auto rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center">
             <Scan className="w-8 h-8 text-emerald-700 animate-pulse" />
           </div>
           <div>
-            <h3 className="font-extrabold text-lg text-slate-900">
-              Identifying Crop...
+            <h3 className="font-extrabold text-base text-slate-900">
+              {isCompressing ? 'Optimizing Photo...' : 'Identifying Crop Condition...'}
             </h3>
             <p className="text-xs text-slate-500 mt-1">
-              Matching symptoms &amp; {location?.season?.split('(')[0] || 'seasonal climate'}
+              {isCompressing
+                ? 'Compressing for instant upload'
+                : `Matching symptoms & ${location?.season?.split('(')[0] || 'climate'}`}
             </p>
           </div>
           <div className="w-48 mx-auto bg-slate-100 rounded-full h-1.5 overflow-hidden">
@@ -244,19 +292,17 @@ export const CropScanner: React.FC<CropScannerProps> = ({
         </div>
       )}
 
-      {/* Preview View: Ready to Analyze */}
-      {previewImage && !isCameraActive && !isAnalyzing && (
+      {/* Preview View: Photo Ready for Analysis */}
+      {previewImage && !isCameraActive && !isAnalyzing && !isCompressing && (
         <div className="bg-white rounded-[32px] p-4 shadow-sm border border-emerald-100 space-y-4">
-          {/* Photo with scan bracket overlay */}
           <div className="relative rounded-2xl overflow-hidden aspect-[4/3] bg-slate-950 flex items-center justify-center">
             <img src={previewImage} alt="Crop sample" className="w-full h-full object-cover" />
 
-            {/* Neon scan reticle overlay */}
             <div className="absolute inset-8 pointer-events-none">
-              <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-[#86EFAC] rounded-tl-2xl shadow-[0_0_8px_rgba(134,239,172,0.8)]" />
-              <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-[#86EFAC] rounded-tr-2xl shadow-[0_0_8px_rgba(134,239,172,0.8)]" />
-              <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-[#86EFAC] rounded-bl-2xl shadow-[0_0_8px_rgba(134,239,172,0.8)]" />
-              <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-[#86EFAC] rounded-br-2xl shadow-[0_0_8px_rgba(134,239,172,0.8)]" />
+              <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-[#86EFAC] rounded-tl-2xl" />
+              <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-[#86EFAC] rounded-tr-2xl" />
+              <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-[#86EFAC] rounded-bl-2xl" />
+              <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-[#86EFAC] rounded-br-2xl" />
             </div>
 
             <button
@@ -268,13 +314,14 @@ export const CropScanner: React.FC<CropScannerProps> = ({
           </div>
 
           <div className="flex items-center justify-between text-xs text-slate-500 px-1">
-            <span>Ready for diagnosis</span>
-            <span className="font-semibold text-emerald-800">
+            <span className="flex items-center gap-1 text-emerald-800 font-medium">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Photo ready &amp; optimized
+            </span>
+            <span className="font-semibold text-slate-700">
               {location?.district || location?.state || 'Auto Location'}
             </span>
           </div>
 
-          {/* Big Action Pill */}
           <button
             onClick={handleStartAnalysis}
             className="w-full py-4 rounded-2xl bg-emerald-800 hover:bg-emerald-900 text-white font-extrabold text-sm flex items-center justify-center gap-2 shadow-md active:scale-98 transition-transform"
@@ -286,10 +333,10 @@ export const CropScanner: React.FC<CropScannerProps> = ({
         </div>
       )}
 
-      {/* Default Dashboard Home View (Matching Screen 2 of reference image) */}
-      {!previewImage && !isCameraActive && !isAnalyzing && (
+      {/* Main Home Screen: Clean AI Plant Scan Card Only (As requested) */}
+      {!previewImage && !isCameraActive && !isAnalyzing && !isCompressing && (
         <div className="space-y-4">
-          {/* Main Headline */}
+          {/* Headline */}
           <div className="px-1">
             <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight leading-tight">
               What Are We<br />
@@ -297,7 +344,7 @@ export const CropScanner: React.FC<CropScannerProps> = ({
             </h2>
           </div>
 
-          {/* Search Bar matching screenshot */}
+          {/* Search Bar */}
           <div className="relative">
             <Search className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
             <input
@@ -310,107 +357,90 @@ export const CropScanner: React.FC<CropScannerProps> = ({
             <button
               onClick={() => startCamera('environment')}
               className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center absolute right-2.5 top-1/2 -translate-y-1/2"
+              title="Camera Scan"
             >
               <Scan className="w-4 h-4" />
             </button>
           </div>
 
-          {/* Main Hero Card: "AI Plant Scan" matching Screen 2 */}
-          <div className="bg-white rounded-[28px] p-5 border border-emerald-100/80 shadow-sm flex items-center justify-between gap-3 relative overflow-hidden">
-            <div className="space-y-3 z-10 max-w-[180px]">
-              <div>
+          {/* Camera Error Alert if live stream failed */}
+          {cameraError && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl text-amber-800 text-xs flex items-center justify-between">
+              <span>{cameraError}</span>
+              <button
+                onClick={() => setCameraError(null)}
+                className="font-bold text-amber-900 ml-2"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
+          {/* ONLY AI Plant Scan Card (With direct camera access + gallery option) */}
+          <div className="bg-white rounded-[28px] p-5 border border-emerald-100/80 shadow-sm space-y-4 relative overflow-hidden">
+            <div className="flex items-center justify-between gap-3">
+              <div className="space-y-1 max-w-[180px]">
                 <h3 className="font-extrabold text-base text-slate-900 leading-snug">
                   AI Plant Scan
                 </h3>
-                <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">
-                  Identify any crop disease in seconds
+                <p className="text-[11px] text-slate-500 leading-snug">
+                  Snap leaf with camera to diagnose disease in seconds
                 </p>
               </div>
 
+              {/* Plant illustration with scan brackets */}
+              <div className="w-24 h-24 rounded-2xl bg-emerald-50/60 border border-emerald-100 p-1.5 flex items-center justify-center relative shrink-0">
+                <img
+                  src={SAMPLE_CROPS[0].dataUrl}
+                  alt="Plant preview"
+                  className="w-full h-full object-contain"
+                />
+                <div className="absolute inset-1 pointer-events-none">
+                  <div className="absolute top-0 left-0 w-2.5 h-2.5 border-t-2 border-l-2 border-emerald-500 rounded-tl-sm" />
+                  <div className="absolute top-0 right-0 w-2.5 h-2.5 border-t-2 border-r-2 border-emerald-500 rounded-tr-sm" />
+                  <div className="absolute bottom-0 left-0 w-2.5 h-2.5 border-b-2 border-l-2 border-emerald-500 rounded-bl-sm" />
+                  <div className="absolute bottom-0 right-0 w-2.5 h-2.5 border-b-2 border-r-2 border-emerald-500 rounded-br-sm" />
+                </div>
+              </div>
+            </div>
+
+            {/* Direct Camera Actions */}
+            <div className="space-y-2 pt-1">
               <button
                 onClick={() => startCamera('environment')}
-                className="px-4 py-2 rounded-full bg-emerald-800 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm active:scale-95 transition-transform"
+                className="w-full py-3.5 px-4 rounded-2xl bg-emerald-800 hover:bg-emerald-900 text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-sm active:scale-98 transition-transform cursor-pointer"
               >
-                Scan Now
+                <Camera className="w-4 h-4" />
+                Open Camera &amp; Scan
+              </button>
+
+              <button
+                onClick={() => galleryInputRef.current?.click()}
+                className="w-full py-2.5 px-4 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <ImageIcon className="w-3.5 h-3.5 text-slate-500" />
+                Upload from Photo Gallery
               </button>
             </div>
-
-            {/* Potted plant / foliage preview with subtle scan brackets */}
-            <div className="w-32 h-32 rounded-2xl bg-emerald-50/60 border border-emerald-100 p-2 flex items-center justify-center relative shrink-0">
-              <img
-                src={SAMPLE_CROPS[0].dataUrl}
-                alt="Plant specimen"
-                className="w-full h-full object-contain"
-              />
-              <div className="absolute inset-1.5 pointer-events-none">
-                <div className="absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2 border-emerald-500 rounded-tl-md" />
-                <div className="absolute top-0 right-0 w-3 h-3 border-t-2 border-r-2 border-emerald-500 rounded-tr-md" />
-                <div className="absolute bottom-0 left-0 w-3 h-3 border-b-2 border-l-2 border-emerald-500 rounded-bl-md" />
-                <div className="absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 border-emerald-500 rounded-br-md" />
-              </div>
-            </div>
           </div>
 
-          {/* 4-Item Quick Action Row matching Screen 2 */}
-          <div className="grid grid-cols-4 gap-2">
-            <button
-              onClick={() => startCamera('environment')}
-              className="bg-white rounded-2xl p-3 border border-emerald-100/70 shadow-sm flex flex-col items-center justify-center gap-1.5 active:scale-95 transition-transform"
-            >
-              <div className="w-8 h-8 rounded-full bg-emerald-50 text-emerald-800 flex items-center justify-center">
-                <Camera className="w-4 h-4" />
-              </div>
-              <span className="text-[10px] font-semibold text-slate-700">Camera</span>
-            </button>
-
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="bg-white rounded-2xl p-3 border border-emerald-100/70 shadow-sm flex flex-col items-center justify-center gap-1.5 active:scale-95 transition-transform"
-            >
-              <div className="w-8 h-8 rounded-full bg-emerald-50 text-emerald-800 flex items-center justify-center">
-                <Upload className="w-4 h-4" />
-              </div>
-              <span className="text-[10px] font-semibold text-slate-700">Upload</span>
-            </button>
-
-            <button
-              onClick={onOpenVoice}
-              className="bg-white rounded-2xl p-3 border border-emerald-100/70 shadow-sm flex flex-col items-center justify-center gap-1.5 active:scale-95 transition-transform"
-            >
-              <div className="w-8 h-8 rounded-full bg-emerald-50 text-emerald-800 flex items-center justify-center">
-                <Mic className="w-4 h-4" />
-              </div>
-              <span className="text-[10px] font-semibold text-slate-700">Voice AI</span>
-            </button>
-
-            <button
-              onClick={onRequestLocation}
-              className="bg-white rounded-2xl p-3 border border-emerald-100/70 shadow-sm flex flex-col items-center justify-center gap-1.5 active:scale-95 transition-transform"
-            >
-              <div className="w-8 h-8 rounded-full bg-emerald-50 text-emerald-800 flex items-center justify-center">
-                <SunMedium className="w-4 h-4" />
-              </div>
-              <span className="text-[10px] font-semibold text-slate-700">Season</span>
-            </button>
-          </div>
-
-          {/* Quick Test Specimens Section matching "Recent Identifications" in Screen 2 */}
+          {/* Quick Test Specimens */}
           <div className="space-y-2 pt-1">
             <div className="flex items-center justify-between px-1">
-              <h3 className="font-extrabold text-sm text-slate-900">
+              <h3 className="font-extrabold text-xs text-slate-900">
                 Quick Test Specimens
               </h3>
-              <span className="text-[11px] text-emerald-700 font-semibold">1-Tap Test</span>
+              <span className="text-[10px] text-emerald-700 font-semibold">1-Tap Test</span>
             </div>
 
-            <div className="grid grid-cols-2 gap-2.5">
+            <div className="grid grid-cols-2 gap-2">
               {filteredSamples.map((sample) => (
                 <button
                   key={sample.id}
                   onClick={() => handleSelectSample(sample)}
-                  className="bg-white rounded-2xl p-2.5 border border-emerald-100/80 shadow-sm text-left flex items-center gap-2.5 active:scale-98 transition-transform group"
+                  className="bg-white rounded-2xl p-2.5 border border-emerald-100/80 shadow-sm text-left flex items-center gap-2.5 active:scale-98 transition-transform group cursor-pointer"
                 >
-                  <div className="w-12 h-12 rounded-xl bg-slate-900 overflow-hidden shrink-0">
+                  <div className="w-11 h-11 rounded-xl bg-slate-900 overflow-hidden shrink-0">
                     <img
                       src={sample.dataUrl}
                       alt={sample.name}
