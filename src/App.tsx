@@ -80,21 +80,9 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#DDE6DE] flex items-center justify-center sm:py-6 p-0 font-sans selection:bg-emerald-200">
-      {/* Mobile Phone Mockup Frame (Just like the reference image!) */}
-      <div className="w-full sm:max-w-[420px] min-h-screen sm:min-h-[840px] sm:max-h-[92vh] bg-[#F3F7F3] sm:rounded-[44px] shadow-2xl sm:border-[8px] sm:border-slate-900 flex flex-col overflow-hidden relative">
-        {/* Top iOS Status Bar Notch Accent */}
-        <div className="hidden sm:flex items-center justify-between px-7 pt-3 text-[11px] font-bold text-slate-800">
-          <span>11:30</span>
-          <div className="w-24 h-4 bg-slate-900 rounded-full mx-auto" />
-          <div className="flex items-center gap-1">
-            <span className="text-[10px]">5G</span>
-            <div className="w-4 h-2 rounded-sm border border-slate-800 p-0.5 flex items-center">
-              <div className="w-2 h-1 bg-slate-800 rounded-xs" />
-            </div>
-          </div>
-        </div>
-
+    <div className="min-h-screen bg-[#E5ECE5] flex items-center justify-center font-sans selection:bg-emerald-200">
+      {/* Responsive App Shell: Fullscreen on mobile, centered mobile container on desktop */}
+      <div className="w-full sm:max-w-md min-h-screen sm:min-h-[820px] sm:max-h-[95vh] bg-[#F3F7F3] sm:rounded-[36px] sm:shadow-2xl sm:border sm:border-emerald-900/10 flex flex-col overflow-hidden relative">
         {/* Header */}
         <Header
           location={location}
