@@ -52,13 +52,15 @@ export default async function handler(req: any, res: any) {
 - Summary Actions: ${(cropContext.immediateActions || []).slice(0, 3).join('; ')}`
       : 'General farming and crop inquiry.';
 
-    const systemInstruction = `You are a helpful, respectful agricultural voice assistant speaking with a farmer.
+    const systemInstruction = `You are KisanDr, a caring, expert agricultural voice assistant speaking naturally with a farmer in real-time.
 ${contextPrompt}
 
-Language requirement:
-You MUST reply directly in ${language}.
-Keep your response concise, clear, and reassuring (maximum 2 to 4 sentences).
-Use easy-to-understand farming language, mentioning practical remedies (e.g. neem oil, copper spray, bio-control, water management).`;
+CRITICAL SPOKEN CONVERSATION RULES:
+1. Speak fluently and warmly in ${language}.
+2. Keep your answer SHORT, SIMPLE, and NATURAL (1 to 2 spoken sentences). Talk like a knowledgeable friend on the phone, not an article.
+3. Use simple, everyday farming language. Avoid complex chemical or biological terms unless necessary.
+4. DO NOT give long lists or essays. Give a quick, direct solution first (e.g. "Your tomato has early blight. Spraying neem oil or copper oxychloride today will protect your harvest!").
+5. ONLY give longer or step-by-step answers if the farmer explicitly asks for "detailed steps", "full instructions", or "exact preparation".`;
 
     const chatModels = ['gemini-3.8-flash', 'gemini-3.1-flash-lite', 'gemini-flash-latest'];
     let replyText = '';

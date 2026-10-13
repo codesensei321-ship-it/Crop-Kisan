@@ -11,6 +11,8 @@ import {
   Radio,
   CheckCircle,
   Sparkles,
+  PhoneCall,
+  PhoneOff,
 } from 'lucide-react';
 import {
   CropAnalysisResult,
@@ -40,46 +42,28 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
   const [isListening, setIsListening] = useState<boolean>(false);
   const [isAiSpeaking, setIsAiSpeaking] = useState<boolean>(false);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [isContinuousMode, setIsContinuousMode] = useState<boolean>(true);
   const [liveTranscript, setLiveTranscript] = useState<string>('');
   const [transcripts, setTranscripts] = useState<TranscriptEntry[]>([]);
   const [textInput, setTextInput] = useState<string>('');
-  const [statusText, setStatusText] = useState<string>('Ready to talk');
+  const [statusText, setStatusText] = useState<string>('Ready • Hands-free active');
 
   const recognitionRef = useRef<any>(null);
   const activeAudioRef = useRef<HTMLAudioElement | null>(null);
   const transcriptEndRef = useRef<HTMLDivElement | null>(null);
+  const isContinuousRef = useRef<boolean>(true);
+
+  // Keep ref in sync
+  useEffect(() => {
+    isContinuousRef.current = isContinuousMode;
+  }, [isContinuousMode]);
 
   // Auto-scroll transcripts
   useEffect(() => {
     transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [transcripts, liveTranscript]);
 
-  // Initialize with greeting in selected language
-  useEffect(() => {
-    if (isOpen) {
-      setTranscripts([
-        {
-          id: 'greeting',
-          sender: 'ai',
-          text: selectedLanguage.greeting,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        },
-      ]);
-      setStatusText(`Ready • Tap mic to speak in ${selectedLanguage.nativeName}`);
-    } else {
-      stopListening();
-      stopAudioPlayback();
-    }
-  }, [isOpen, selectedLanguage.id]);
-
-  // Clean up on unmount
-  useEffect(() => {
-    return () => {
-      stopListening();
-      stopAudioPlayback();
-    };
-  }, []);
-
+  // Stop current audio playback
   const stopAudioPlayback = () => {
     if (activeAudioRef.current) {
       activeAudioRef.current.pause();
@@ -88,26 +72,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
     setIsAiSpeaking(false);
   };
 
-  const getLanguageQuestions = (langId: string) => {
-    switch (langId) {
-      case 'hindi':
-        return ['यह कौन सी बीमारी है?', 'इसका क्या इलाज है?', 'क्या फसल बच जाएगी?'];
-      case 'kannada':
-        return ['ಯಾವ ರೋಗ ಬಂದಿದೆ?', 'ಸಾವಯವ ಚಿಕಿತ್ಸೆ ಏನು?', 'ಮೊದಲು ಏನು ಮಾಡಬೇಕು?'];
-      case 'telugu':
-        return ['ఏ తెగులు సోకింది?', 'నివారణ మందులు ఏమిటి?', 'ప్రమాదకరమా?'];
-      case 'tamil':
-        return ['என்ன நோய் இது?', 'உடனடி தீர்வு என்ன?', 'பயிர் பிழைக்குமா?'];
-      case 'marathi':
-        return ['हा कोणता रोग आहे?', 'काय उपाय करावा?', 'धोकादायक आहे का?'];
-      case 'bengali':
-        return ['কী রোগ হয়েছে?', 'কী ওষুধ দেব?', 'ফসল বাঁচবে তো?'];
-      default:
-        return ['What disease is this?', 'How to treat it?', 'Is it dangerous?'];
-    }
-  };
-
-  // Stop Web Speech recognition
+  // Stop speech recognition
   const stopListening = () => {
     if (recognitionRef.current) {
       try {
@@ -121,7 +86,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
     setLiveTranscript('');
   };
 
-  // Start mobile Speech-to-Text via Web Speech API
+  // Start continuous hands-free speech recognition
   const startListening = () => {
     stopAudioPlayback();
 
@@ -129,11 +94,15 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
     if (!SpeechRecognitionClass) {
-      alert('Voice input is not supported in this browser. Please type your question below.');
+      setStatusText('Type question below (speech unsupported in browser)');
       return;
     }
 
     try {
+      if (recognitionRef.current) {
+        stopListening();
+      }
+
       const recognition = new SpeechRecognitionClass();
       recognitionRef.current = recognition;
 
@@ -170,13 +139,24 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
       };
 
       recognition.onerror = (event: any) => {
-        console.warn('Speech recognition event:', event.error);
+        console.warn('Speech recognition error event:', event.error);
         setIsListening(false);
         setLiveTranscript('');
-        if (event.error === 'not-allowed') {
+
+        if (event.error === 'no-speech') {
+          // If no speech detected in continuous mode, quietly restart listening
+          if (isContinuousRef.current && !isAiSpeaking && !isProcessing) {
+            setTimeout(() => {
+              if (isContinuousRef.current && !isAiSpeaking && !isProcessing) {
+                startListening();
+              }
+            }, 400);
+          }
+        } else if (event.error === 'not-allowed') {
           setStatusText('Microphone permission blocked. Please enable mic access.');
+          setIsContinuousMode(false);
         } else {
-          setStatusText(`Ready • Tap mic to speak in ${selectedLanguage.nativeName}`);
+          setStatusText(`Ready • Speak in ${selectedLanguage.nativeName}`);
         }
       };
 
@@ -186,22 +166,64 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
 
       recognition.start();
     } catch (err) {
-      console.warn('Speech recognition startup error:', err);
+      console.warn('Speech recognition error:', err);
       setIsListening(false);
-      setStatusText(`Ready • Tap mic to speak in ${selectedLanguage.nativeName}`);
+      setStatusText(`Ready • Speak in ${selectedLanguage.nativeName}`);
     }
   };
 
-  const toggleMic = () => {
-    if (isListening) {
-      stopListening();
-      setStatusText(`Ready • Tap mic to speak in ${selectedLanguage.nativeName}`);
+  // Initialize with greeting & start hands-free conversation
+  useEffect(() => {
+    if (isOpen) {
+      setTranscripts([
+        {
+          id: 'greeting',
+          sender: 'ai',
+          text: selectedLanguage.greeting,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        },
+      ]);
+      setIsContinuousMode(true);
+      setStatusText(`Ready • Listening in ${selectedLanguage.nativeName}`);
+
+      // Auto start listening for hands-free natural conversation
+      const timer = setTimeout(() => {
+        startListening();
+      }, 400);
+      return () => clearTimeout(timer);
     } else {
-      startListening();
+      stopListening();
+      stopAudioPlayback();
+    }
+  }, [isOpen, selectedLanguage.id]);
+
+  useEffect(() => {
+    return () => {
+      stopListening();
+      stopAudioPlayback();
+    };
+  }, []);
+
+  const getLanguageQuestions = (langId: string) => {
+    switch (langId) {
+      case 'hindi':
+        return ['यह कौन सी बीमारी है?', 'इसका क्या इलाज है?', 'क्या फसल बच जाएगी?'];
+      case 'kannada':
+        return ['ಯಾವ ರೋಗ ಬಂದಿದೆ?', 'ಸಾವಯವ ಚಿಕಿತ್ಸೆ ಏನು?', 'ಮೊದಲು ಏನು ಮಾಡಬೇಕು?'];
+      case 'telugu':
+        return ['ఏ తెగులు సోకింది?', 'నివారణ మందులు ఏమిటి?', 'ప్రమాదకరమా?'];
+      case 'tamil':
+        return ['என்ன நோய் இது?', 'உடனடி தீர்வு என்ன?', 'பயிர் பிழைக்குமா?'];
+      case 'marathi':
+        return ['हा कोणता रोग आहे?', 'काय उपाय करावा?', 'धोकादायक आहे का?'];
+      case 'bengali':
+        return ['কী রোগ হয়েছে?', 'কী ওষুধ দেব?', 'ফসল বাঁচবে তো?'];
+      default:
+        return ['What disease is this?', 'How to treat it?', 'Is it dangerous?'];
     }
   };
 
-  // Send question to backend for text and spoken voice response
+  // Send query and get short natural spoken answer
   const handleSendQuestion = async (queryText: string) => {
     if (!queryText.trim()) return;
 
@@ -270,25 +292,44 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
         const audio = new Audio(`data:audio/wav;base64,${data.audioBase64}`);
         activeAudioRef.current = audio;
 
+        // When AI finishes speaking, AUTOMATICALLY resume listening hands-free!
         audio.onended = () => {
           setIsAiSpeaking(false);
-          setStatusText(`Ready • Tap mic to speak in ${selectedLanguage.nativeName}`);
           activeAudioRef.current = null;
+
+          if (isContinuousRef.current) {
+            setStatusText(`Listening... speak in ${selectedLanguage.nativeName}`);
+            // Smooth natural turn-taking pause before opening mic
+            setTimeout(() => {
+              if (isContinuousRef.current) {
+                startListening();
+              }
+            }, 300);
+          } else {
+            setStatusText(`Ready • Speak anytime in ${selectedLanguage.nativeName}`);
+          }
         };
 
         audio.onerror = () => {
           setIsAiSpeaking(false);
-          setStatusText(`Ready • Tap mic to speak in ${selectedLanguage.nativeName}`);
           activeAudioRef.current = null;
+          if (isContinuousRef.current) {
+            setTimeout(() => startListening(), 400);
+          }
         };
 
         await audio.play().catch((err) => {
-          console.warn('Audio autoplay failed:', err);
+          console.warn('Audio play error:', err);
           setIsAiSpeaking(false);
-          setStatusText(`Ready • Tap mic to speak in ${selectedLanguage.nativeName}`);
+          if (isContinuousRef.current) {
+            setTimeout(() => startListening(), 400);
+          }
         });
       } else {
-        setStatusText(`Ready • Tap mic to speak in ${selectedLanguage.nativeName}`);
+        // If no audio, resume listening immediately
+        if (isContinuousRef.current) {
+          setTimeout(() => startListening(), 500);
+        }
       }
     } catch (err: any) {
       console.error('Voice chat error:', err);
@@ -297,13 +338,34 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
         {
           id: Math.random().toString(),
           sender: 'ai',
-          text: 'Unable to connect right now. Please check your network and try again.',
+          text: 'Network issue. Please try again.',
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         },
       ]);
-      setStatusText(`Ready • Tap mic to speak in ${selectedLanguage.nativeName}`);
+      if (isContinuousRef.current) {
+        setTimeout(() => startListening(), 800);
+      }
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  const toggleMic = () => {
+    if (isAiSpeaking) {
+      // User tapped while AI was speaking: interrupt AI and start listening
+      stopAudioPlayback();
+      setIsContinuousMode(true);
+      startListening();
+      return;
+    }
+
+    if (isListening) {
+      stopListening();
+      setIsContinuousMode(false);
+      setStatusText(`Paused • Tap mic to resume talking`);
+    } else {
+      setIsContinuousMode(true);
+      startListening();
     }
   };
 
@@ -325,9 +387,14 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
           <div className="flex items-center gap-2.5">
             <div className={`w-3 h-3 rounded-full ${isAiSpeaking ? 'bg-emerald-500 animate-ping' : isListening ? 'bg-green-500 animate-bounce' : 'bg-emerald-600'}`} />
             <div>
-              <h3 className="font-extrabold text-sm text-slate-900 leading-none">
-                AI Voice Doctor
-              </h3>
+              <div className="flex items-center gap-1.5">
+                <h3 className="font-extrabold text-sm text-slate-900 leading-none">
+                  AI Voice Doctor
+                </h3>
+                <span className="text-[9px] font-bold px-1.5 py-0.2 bg-emerald-100 text-emerald-800 rounded-full">
+                  Live
+                </span>
+              </div>
               <p className="text-[10px] text-slate-400 mt-1 truncate max-w-[170px] sm:max-w-xs">
                 {result.cropName}: {result.diseaseName}
               </p>
@@ -363,8 +430,8 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
           </div>
         </div>
 
-        {/* Dynamic Status Bar */}
-        <div className="px-4 py-2 bg-emerald-50/70 border-b border-emerald-100/60 flex items-center justify-between text-[11px]">
+        {/* Dynamic Status Bar with Hands-Free Live Pill */}
+        <div className="px-4 py-2 bg-emerald-50/80 border-b border-emerald-100/60 flex items-center justify-between text-[11px]">
           <span className="font-semibold text-emerald-900 flex items-center gap-1.5">
             {isProcessing ? (
               <>
@@ -374,12 +441,12 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
             ) : isAiSpeaking ? (
               <>
                 <Volume2 className="w-3.5 h-3.5 text-emerald-700 animate-pulse" />
-                AI Speaking...
+                AI Speaking (Tap mic to interrupt)...
               </>
             ) : isListening ? (
               <>
                 <Radio className="w-3.5 h-3.5 text-green-600 animate-pulse" />
-                Listening to you...
+                Listening... (Hands-free conversation)
               </>
             ) : (
               <>
@@ -451,20 +518,30 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
           ))}
         </div>
 
-        {/* Bottom Speaking Bar */}
+        {/* Bottom Speaking Bar: Hands-Free Natural Voice Controls */}
         <div className="p-3.5 bg-white border-t border-slate-100 flex items-center gap-2">
-          {/* Main Large Speak / Mic Button */}
+          {/* Main Large Speak / Mic Button with continuous pulse */}
           <button
             onClick={toggleMic}
             className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 active:scale-90 transition-transform cursor-pointer shadow-md ${
               isListening
-                ? 'bg-red-500 text-white animate-pulse shadow-red-200'
-                : 'bg-emerald-800 text-white hover:bg-emerald-900 shadow-emerald-200'
+                ? 'bg-emerald-700 text-white animate-pulse ring-4 ring-emerald-200'
+                : isAiSpeaking
+                ? 'bg-amber-600 text-white animate-pulse'
+                : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
             }`}
-            title={isListening ? 'Stop listening' : 'Tap to speak'}
+            title={
+              isAiSpeaking
+                ? 'Tap to interrupt AI'
+                : isListening
+                ? 'Tap to pause hands-free conversation'
+                : 'Tap to speak hands-free'
+            }
           >
             {isListening ? (
               <Radio className="w-5 h-5 animate-pulse" />
+            ) : isAiSpeaking ? (
+              <Volume2 className="w-5 h-5" />
             ) : (
               <Mic className="w-5 h-5" />
             )}
@@ -482,7 +559,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
               type="text"
               value={textInput}
               onChange={(e) => setTextInput(e.target.value)}
-              placeholder={isListening ? 'Listening...' : `Ask in ${selectedLanguage.nativeName}...`}
+              placeholder={isListening ? 'Listening hands-free...' : `Ask in ${selectedLanguage.nativeName}...`}
               className="flex-1 bg-transparent text-xs text-slate-800 focus:outline-none placeholder-slate-400"
             />
             <button
@@ -494,22 +571,13 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
             </button>
           </form>
 
-          {/* Stop audio button if speaking */}
-          {isAiSpeaking && (
-            <button
-              onClick={stopAudioPlayback}
-              className="p-2 rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200"
-              title="Stop audio"
-            >
-              <VolumeX className="w-4 h-4" />
-            </button>
-          )}
-
+          {/* End Call button */}
           <button
             onClick={onClose}
-            className="h-9 px-2.5 rounded-full text-slate-500 hover:text-slate-800 text-xs font-semibold cursor-pointer"
+            className="h-9 px-3 rounded-full bg-slate-100 hover:bg-red-50 hover:text-red-700 text-slate-600 text-xs font-semibold cursor-pointer flex items-center gap-1 transition-colors"
           >
-            Done
+            <PhoneOff className="w-3.5 h-3.5" />
+            End
           </button>
         </div>
       </div>
