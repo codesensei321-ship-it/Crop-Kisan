@@ -87,8 +87,9 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
   };
 
   // Start continuous hands-free speech recognition
-  const startListening = () => {
+  const startListening = (langOverride?: VoiceLanguage) => {
     stopAudioPlayback();
+    const activeLang = langOverride || selectedLanguage;
 
     const SpeechRecognitionClass =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -106,14 +107,14 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
       const recognition = new SpeechRecognitionClass();
       recognitionRef.current = recognition;
 
-      recognition.lang = selectedLanguage.code || 'en-IN';
+      recognition.lang = activeLang.code || 'en-IN';
       recognition.continuous = false;
       recognition.interimResults = true;
       recognition.maxAlternatives = 1;
 
       recognition.onstart = () => {
         setIsListening(true);
-        setStatusText(`Listening... speak in ${selectedLanguage.nativeName}`);
+        setStatusText(`Listening... speak in ${activeLang.nativeName}`);
       };
 
       recognition.onresult = (event: any) => {
@@ -134,7 +135,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
 
         if (final && final.trim()) {
           stopListening();
-          handleSendQuestion(final.trim());
+          handleSendQuestion(final.trim(), activeLang);
         }
       };
 
@@ -144,11 +145,10 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
         setLiveTranscript('');
 
         if (event.error === 'no-speech') {
-          // If no speech detected in continuous mode, quietly restart listening
           if (isContinuousRef.current && !isAiSpeaking && !isProcessing) {
             setTimeout(() => {
               if (isContinuousRef.current && !isAiSpeaking && !isProcessing) {
-                startListening();
+                startListening(activeLang);
               }
             }, 400);
           }
@@ -156,7 +156,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
           setStatusText('Microphone permission blocked. Please enable mic access.');
           setIsContinuousMode(false);
         } else {
-          setStatusText(`Ready • Speak in ${selectedLanguage.nativeName}`);
+          setStatusText(`Ready • Speak in ${activeLang.nativeName}`);
         }
       };
 
@@ -168,11 +168,11 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
     } catch (err) {
       console.warn('Speech recognition error:', err);
       setIsListening(false);
-      setStatusText(`Ready • Speak in ${selectedLanguage.nativeName}`);
+      setStatusText(`Ready • Speak in ${activeLang.nativeName}`);
     }
   };
 
-  // Initialize with greeting & start hands-free conversation
+  // Initialize with greeting & start hands-free conversation on open
   useEffect(() => {
     if (isOpen) {
       setTranscripts([
@@ -186,7 +186,6 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
       setIsContinuousMode(true);
       setStatusText(`Ready • Listening in ${selectedLanguage.nativeName}`);
 
-      // Auto start listening for hands-free natural conversation
       const timer = setTimeout(() => {
         startListening();
       }, 400);
@@ -195,7 +194,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
       stopListening();
       stopAudioPlayback();
     }
-  }, [isOpen, selectedLanguage.id]);
+  }, [isOpen]);
 
   useEffect(() => {
     return () => {
@@ -224,13 +223,14 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
   };
 
   // Send query and get short natural spoken answer
-  const handleSendQuestion = async (queryText: string) => {
+  const handleSendQuestion = async (queryText: string, langOverride?: VoiceLanguage) => {
     if (!queryText.trim()) return;
+    const activeLang = langOverride || selectedLanguage;
 
     stopAudioPlayback();
     stopListening();
     setIsProcessing(true);
-    setStatusText('Thinking...');
+    setStatusText('Replying...');
 
     const userMessage: TranscriptEntry = {
       id: Math.random().toString(),
@@ -251,7 +251,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
         },
         body: JSON.stringify({
           message: queryText.trim(),
-          language: selectedLanguage.name,
+          language: activeLang.name,
           cropContext: {
             cropName: result.cropName,
             diseaseName: result.diseaseName,
@@ -287,26 +287,25 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
       // Play back audio response
       if (data.audioBase64) {
         setIsAiSpeaking(true);
-        setStatusText(`AI Speaking in ${selectedLanguage.nativeName}...`);
+        setStatusText(`AI Speaking in ${activeLang.nativeName}...`);
 
         const audio = new Audio(`data:audio/wav;base64,${data.audioBase64}`);
         activeAudioRef.current = audio;
 
-        // When AI finishes speaking, AUTOMATICALLY resume listening hands-free!
+        // When AI finishes speaking, AUTOMATICALLY resume listening hands-free in activeLang!
         audio.onended = () => {
           setIsAiSpeaking(false);
           activeAudioRef.current = null;
 
           if (isContinuousRef.current) {
-            setStatusText(`Listening... speak in ${selectedLanguage.nativeName}`);
-            // Smooth natural turn-taking pause before opening mic
+            setStatusText(`Listening... speak in ${activeLang.nativeName}`);
             setTimeout(() => {
               if (isContinuousRef.current) {
-                startListening();
+                startListening(activeLang);
               }
             }, 300);
           } else {
-            setStatusText(`Ready • Speak anytime in ${selectedLanguage.nativeName}`);
+            setStatusText(`Ready • Speak anytime in ${activeLang.nativeName}`);
           }
         };
 
@@ -314,7 +313,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
           setIsAiSpeaking(false);
           activeAudioRef.current = null;
           if (isContinuousRef.current) {
-            setTimeout(() => startListening(), 400);
+            setTimeout(() => startListening(activeLang), 400);
           }
         };
 
@@ -322,13 +321,12 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
           console.warn('Audio play error:', err);
           setIsAiSpeaking(false);
           if (isContinuousRef.current) {
-            setTimeout(() => startListening(), 400);
+            setTimeout(() => startListening(activeLang), 400);
           }
         });
       } else {
-        // If no audio, resume listening immediately
         if (isContinuousRef.current) {
-          setTimeout(() => startListening(), 500);
+          setTimeout(() => startListening(activeLang), 400);
         }
       }
     } catch (err: any) {
@@ -343,7 +341,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
         },
       ]);
       if (isContinuousRef.current) {
-        setTimeout(() => startListening(), 800);
+        setTimeout(() => startListening(activeLang), 600);
       }
     } finally {
       setIsProcessing(false);
@@ -352,10 +350,9 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
 
   const toggleMic = () => {
     if (isAiSpeaking) {
-      // User tapped while AI was speaking: interrupt AI and start listening
       stopAudioPlayback();
       setIsContinuousMode(true);
-      startListening();
+      startListening(selectedLanguage);
       return;
     }
 
@@ -365,14 +362,34 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
       setStatusText(`Paused • Tap mic to resume talking`);
     } else {
       setIsContinuousMode(true);
-      startListening();
+      startListening(selectedLanguage);
     }
   };
 
+  // Seamless in-conversation language switcher
   const handleLanguageChange = (lang: VoiceLanguage) => {
     stopAudioPlayback();
     stopListening();
     onSelectLanguage(lang);
+
+    // Keep conversation history intact and add friendly switch notice
+    setTranscripts((prev) => [
+      ...prev,
+      {
+        id: Math.random().toString(),
+        sender: 'ai',
+        text: `🌐 Switched to ${lang.nativeName} (${lang.name}). ${lang.greeting}`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      },
+    ]);
+
+    setIsContinuousMode(true);
+    setStatusText(`Listening in ${lang.nativeName}...`);
+
+    // Immediately start listening hands-free in the new language!
+    setTimeout(() => {
+      startListening(lang);
+    }, 350);
   };
 
   if (!isOpen) return null;

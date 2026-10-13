@@ -1,4 +1,4 @@
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, ThinkingLevel } from '@google/genai';
 
 export const config = {
   maxDuration: 60,
@@ -62,18 +62,28 @@ CRITICAL SPOKEN CONVERSATION RULES:
 4. DO NOT give long lists or essays. Give a quick, direct solution first (e.g. "Your tomato has early blight. Spraying neem oil or copper oxychloride today will protect your harvest!").
 5. ONLY give longer or step-by-step answers if the farmer explicitly asks for "detailed steps", "full instructions", or "exact preparation".`;
 
-    const chatModels = ['gemini-3.8-flash', 'gemini-3.1-flash-lite', 'gemini-flash-latest'];
+    const chatModels = ['gemini-3.1-flash-lite', 'gemini-flash-latest', 'gemini-3.8-flash'];
     let replyText = '';
 
     for (const m of chatModels) {
       try {
+        const config: any = {
+          systemInstruction,
+        };
+
+        // Turn off reasoning/thinking latency so it answers right away
+        if (m === 'gemini-3.1-flash-lite') {
+          config.thinkingConfig = { thinkingLevel: ThinkingLevel.MINIMAL };
+        } else if (m === 'gemini-3.8-flash') {
+          config.thinkingConfig = { thinkingLevel: ThinkingLevel.LOW };
+        }
+
         const chatResponse = await ai.models.generateContent({
           model: m,
           contents: message,
-          config: {
-            systemInstruction,
-          },
+          config,
         });
+
         if (chatResponse.text) {
           replyText = chatResponse.text;
           break;
