@@ -88,7 +88,11 @@ export default function App() {
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error || errorData.details || `Analysis failed (${res.status})`);
+        const message =
+          errorData.details && errorData.error === 'Failed to analyze crop image'
+            ? errorData.details
+            : errorData.error || errorData.details || `Analysis failed (${res.status})`;
+        throw new Error(message);
       }
 
       const data: CropAnalysisResult = await res.json();

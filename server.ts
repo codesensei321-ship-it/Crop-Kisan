@@ -119,7 +119,12 @@ CLINICAL INSTRUCTIONS:
 
     const prompt = `Please analyze this crop/plant leaf image carefully. Factor in the location (${locationText}) and season (${season || 'Monsoon/Post-Monsoon'}). Output strictly in ${language} according to the JSON schema.`;
 
-    const visionModels = ['gemini-3.8-flash', 'gemini-3.1-flash-lite', 'gemini-flash-latest'];
+    // Use high-quota models (Gemini 3.1 Flash Lite) to prevent quota exhaustion
+    const visionModels = [
+      'gemini-3.1-flash-lite',
+      'gemini-flash-lite-latest',
+      'gemini-3.5-flash',
+    ];
     let response: any = null;
     let lastError: any = null;
 
@@ -345,7 +350,12 @@ CRITICAL SPOKEN CONVERSATION RULES:
 4. DO NOT give long lists or essays. Give a quick, direct solution first (e.g. "Your tomato has early blight. Spraying neem oil or copper oxychloride today will protect your harvest!").
 5. ONLY give longer or step-by-step answers if the farmer explicitly asks for "detailed steps", "full instructions", or "exact preparation".`;
 
-    const chatModels = ['gemini-3.1-flash-lite', 'gemini-flash-latest', 'gemini-3.8-flash'];
+    // Use high-quota models (Gemini 3.1 Flash Lite) to prevent quota exhaustion
+    const chatModels = [
+      'gemini-3.1-flash-lite',
+      'gemini-flash-lite-latest',
+      'gemini-3.5-flash',
+    ];
     let replyText = '';
 
     for (const m of chatModels) {
@@ -356,8 +366,6 @@ CRITICAL SPOKEN CONVERSATION RULES:
 
         if (m === 'gemini-3.1-flash-lite') {
           config.thinkingConfig = { thinkingLevel: ThinkingLevel.MINIMAL };
-        } else if (m === 'gemini-3.8-flash') {
-          config.thinkingConfig = { thinkingLevel: ThinkingLevel.LOW };
         }
 
         const chatResponse = await ai.models.generateContent({

@@ -28,9 +28,12 @@ export default async function handler(req: any, res: any) {
       return res.status(400).json({ error: 'Message is required' });
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY || '';
     if (!apiKey) {
-      return res.status(500).json({ error: 'GEMINI_API_KEY is not configured' });
+      return res.status(500).json({
+        error: 'GEMINI_API_KEY is not configured',
+        details: 'Please set GEMINI_API_KEY in your hosting environment variables.',
+      });
     }
 
     const ai = new GoogleGenAI({
@@ -62,7 +65,12 @@ CRITICAL SPOKEN CONVERSATION RULES:
 4. DO NOT give long lists or essays. Give a quick, direct solution first (e.g. "Your tomato has early blight. Spraying neem oil or copper oxychloride today will protect your harvest!").
 5. ONLY give longer or step-by-step answers if the farmer explicitly asks for "detailed steps", "full instructions", or "exact preparation".`;
 
-    const chatModels = ['gemini-3.1-flash-lite', 'gemini-flash-latest', 'gemini-3.8-flash'];
+    // Use high-quota models (Gemini 3.1 Flash Lite) to prevent quota exhaustion
+    const chatModels = [
+      'gemini-3.1-flash-lite',
+      'gemini-flash-lite-latest',
+      'gemini-3.5-flash',
+    ];
     let replyText = '';
 
     for (const m of chatModels) {
@@ -74,8 +82,6 @@ CRITICAL SPOKEN CONVERSATION RULES:
         // Turn off reasoning/thinking latency so it answers right away
         if (m === 'gemini-3.1-flash-lite') {
           config.thinkingConfig = { thinkingLevel: ThinkingLevel.MINIMAL };
-        } else if (m === 'gemini-3.8-flash') {
-          config.thinkingConfig = { thinkingLevel: ThinkingLevel.LOW };
         }
 
         const chatResponse = await ai.models.generateContent({
