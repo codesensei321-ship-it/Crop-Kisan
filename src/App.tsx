@@ -18,6 +18,8 @@ export default function App() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isVoiceModalOpen, setIsVoiceModalOpen] = useState<boolean>(false);
 
+  const [isTranslatingReport, setIsTranslatingReport] = useState<boolean>(false);
+
   const handleDetectLocation = async () => {
     setIsDetectingLocation(true);
     try {
@@ -33,6 +35,34 @@ export default function App() {
   useEffect(() => {
     handleDetectLocation();
   }, []);
+
+  const handleLanguageChange = async (newLang: VoiceLanguage) => {
+    setSelectedLanguage(newLang);
+
+    // If report is already shown, translate the report into the new language!
+    if (analysisResult) {
+      setIsTranslatingReport(true);
+      try {
+        const res = await fetch('/api/translate-report', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            report: analysisResult,
+            targetLanguage: newLang.name,
+          }),
+        });
+
+        if (res.ok) {
+          const translatedData: CropAnalysisResult = await res.json();
+          setAnalysisResult(translatedData);
+        }
+      } catch (err) {
+        console.warn('Failed to translate existing report:', err);
+      } finally {
+        setIsTranslatingReport(false);
+      }
+    }
+  };
 
   const handleAnalyzeCrop = async (imageBase64: string, mimeType: string) => {
     setIsAnalyzing(true);
@@ -52,6 +82,7 @@ export default function App() {
           currentDate: location?.dateStr || new Date().toISOString(),
           month: location?.month || 'October',
           season: location?.season || 'Post-Monsoon',
+          language: selectedLanguage.name,
         }),
       });
 
@@ -86,7 +117,7 @@ export default function App() {
         <Header
           location={location}
           selectedLanguage={selectedLanguage}
-          onSelectLanguage={setSelectedLanguage}
+          onSelectLanguage={handleLanguageChange}
           onRequestLocation={handleDetectLocation}
           isDetectingLocation={isDetectingLocation}
         />
@@ -116,17 +147,26 @@ export default function App() {
               isAnalyzing={isAnalyzing}
               location={location}
               onRequestLocation={handleDetectLocation}
+              selectedLanguage={selectedLanguage}
             />
           ) : (
             scannedImage && (
-              <AnalysisReport
-                result={analysisResult}
-                location={location}
-                scannedImage={scannedImage}
-                selectedLanguage={selectedLanguage}
-                onOpenVoiceAssistant={() => setIsVoiceModalOpen(true)}
-                onScanAnother={handleScanAnother}
-              />
+              <>
+                {isTranslatingReport && (
+                  <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-900 text-xs font-semibold flex items-center justify-center gap-2 animate-pulse shadow-xs">
+                    <span className="w-2 h-2 rounded-full bg-emerald-600 animate-ping" />
+                    <span>Translating report to {selectedLanguage.nativeName}...</span>
+                  </div>
+                )}
+                <AnalysisReport
+                  result={analysisResult}
+                  location={location}
+                  scannedImage={scannedImage}
+                  selectedLanguage={selectedLanguage}
+                  onOpenVoiceAssistant={() => setIsVoiceModalOpen(true)}
+                  onScanAnother={handleScanAnother}
+                />
+              </>
             )
           )}
         </div>

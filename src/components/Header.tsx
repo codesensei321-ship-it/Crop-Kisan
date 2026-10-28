@@ -2,6 +2,7 @@ import React from 'react';
 import { MapPin, Globe, Sparkles, Sprout } from 'lucide-react';
 import { LocationContext, VoiceLanguage } from '../types.ts';
 import { SUPPORTED_LANGUAGES } from '../utils/languages.ts';
+import { getTranslations } from '../utils/translations.ts';
 
 interface HeaderProps {
   location: LocationContext | null;
@@ -18,6 +19,8 @@ export const Header: React.FC<HeaderProps> = ({
   onRequestLocation,
   isDetectingLocation,
 }) => {
+  const t = getTranslations(selectedLanguage.id);
+
   return (
     <header className="px-5 pt-4 pb-2">
       <div className="flex items-center justify-between">
@@ -29,11 +32,11 @@ export const Header: React.FC<HeaderProps> = ({
           <div>
             <div className="flex items-center gap-1">
               <span className="text-[11px] font-medium text-emerald-800 flex items-center gap-1">
-                KisanDr <Sparkles className="w-3 h-3 text-emerald-600 inline" />
+                {t.appSubtitle} <Sparkles className="w-3 h-3 text-emerald-600 inline" />
               </span>
             </div>
             <h1 className="text-sm font-bold text-slate-900 tracking-tight leading-none">
-              AI Crop Doctor
+              {t.appTitle}
             </h1>
           </div>
         </div>
@@ -44,12 +47,12 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             onClick={onRequestLocation}
             disabled={isDetectingLocation}
-            title="Refresh location"
+            title={t.location}
             className="h-9 px-2.5 rounded-full bg-white border border-emerald-100 shadow-sm flex items-center gap-1.5 text-xs text-slate-700 active:scale-95 transition-transform"
           >
             <MapPin className={`w-3.5 h-3.5 text-emerald-700 ${isDetectingLocation ? 'animate-bounce' : ''}`} />
-            <span className="max-w-[80px] sm:max-w-[120px] truncate font-medium text-[11px]">
-              {location?.district || location?.state || (isDetectingLocation ? '...' : 'Location')}
+            <span className="max-w-[70px] sm:max-w-[110px] truncate font-medium text-[11px]">
+              {location?.district || location?.state || (isDetectingLocation ? t.locating : t.location)}
             </span>
           </button>
 
@@ -76,3 +79,4 @@ export const Header: React.FC<HeaderProps> = ({
     </header>
   );
 };
+

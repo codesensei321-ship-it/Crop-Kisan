@@ -30,10 +30,24 @@ const ai = new GoogleGenAI({
   },
 });
 
+// Download pitch deck PowerPoint presentation
+app.get(['/api/download-pitch-deck', '/KisanDr_AI_Crop_Pitch_Deck.pptx'], (_req, res) => {
+  const pptxPath = path.join(__dirname, 'public', 'KisanDr_AI_Crop_Pitch_Deck.pptx');
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.presentationml.presentation');
+  res.download(pptxPath, 'KisanDr_AI_Crop_Pitch_Deck.pptx', (err) => {
+    if (err) {
+      console.error('Download error:', err);
+      if (!res.headersSent) {
+        res.status(404).send('Pitch deck presentation file not found');
+      }
+    }
+  });
+});
+
 // Crop analysis endpoint
 app.post('/api/analyze-crop', async (req, res) => {
   try {
-    const { imageBase64, mimeType = 'image/jpeg', location, currentDate, month, season } = req.body;
+    const { imageBase64, mimeType = 'image/jpeg', location, currentDate, month, season, language = 'English' } = req.body;
 
     if (!imageBase64) {
       return res.status(400).json({ error: 'No image provided for crop analysis' });
@@ -77,16 +91,33 @@ Context:
 - Current Date: ${currentDate || new Date().toISOString()}
 - Month: ${month || 'Current month'}
 - Agricultural Season: ${season || 'Seasonal transition'}
+- User's Chosen Language: ${language}
 
-CRITICAL INSTRUCTIONS:
+CRITICAL LANGUAGE REQUIREMENT:
+The farmer's selected language is: ${language}.
+ALL text fields in the output JSON MUST be fully translated and written directly in ${language} using its native script (e.g. Tamil, Hindi, Kannada, Telugu, Marathi, Bengali, or English):
+1. "cropName": Write the common crop name in ${language} (with English botanical name in brackets if helpful, e.g. "கோதுமை (Wheat)").
+2. "diseaseName": Write the disease name in ${language} with common/scientific name in brackets (e.g. "இலை துரு நோய் (Leaf Rust)").
+3. "severity": Severity in ${language} (e.g., "குறைவு (Low)", "நடுத்தரம் (Medium)", "அதிகம் (High)", "தீவிரமானது (Critical)", "ஆரோக்கியமானது (Healthy)").
+4. "symptoms": Array of bullet points describing visible leaf/foliage symptoms written entirely in natural ${language}.
+5. "pestDamage": Array of visible pest or insect notes written in ${language}.
+6. "nutrientDeficiencies": Array of nutrient issues written in ${language}.
+7. "causesAndContext": Array of causes written in ${language}.
+8. "immediateActions": Actionable immediate steps written clearly in simple, farmer-friendly ${language} (e.g., bio-control, neem oil, fungicide spray, irrigation hygiene).
+9. "preventionAdvice": Long-term preventive tips written in ${language}.
+10. "whenToContactExpert": Recommendation on when to consult local Krishi Vigyan Kendra (KVK) or extension officer, written in ${language}.
+11. "seasonalLocalizedNote": Regional seasonal advice in ${language}.
+12. "unclearReason": Reason in ${language} if photo is unidentifiable.
+
+CLINICAL INSTRUCTIONS:
 1. Examine whether the image depicts a crop, plant foliage, stem, fruit, or farm specimen.
-2. If the image is blurry, pitch black, out of focus, or NOT a plant/crop at all (e.g. coffee mug, face, dog, desk, room), you MUST set "isCropOrPlant": false or "isIdentifiable": false, and describe clearly in "unclearReason" what you observe and politely instruct the farmer to capture a sharp, well-lit photo of the affected plant foliage. NEVER GUESS OR HALLUCINATE A DISEASE IF THE IMAGE IS UNCLEAR OR NOT A PLANT.
-3. If the plant is clear and healthy, set "isCropOrPlant": true, "isIdentifiable": true, "isHealthy": true, "diseaseName": "Healthy Plant (No Disease Detected)", "severity": "None (Healthy)".
-4. If a disease, pest damage, or deficiency is visible, identify the primary disease (e.g., Early Blight, Late Blight, Rice Blast, Powdery Mildew, Rust, etc.).
-5. Provide contextual recommendations specifically tuned to the farmer's geography and season (e.g. monsoon humidity exacerbating fungal spores, Kharif crop protection, high moisture drainage, neem oil, organic trichoderma viride, biocontrol, and standard agronomic practices).
+2. If the image is blurry, pitch black, out of focus, or NOT a plant/crop at all (e.g. coffee mug, face, dog, desk, room), you MUST set "isCropOrPlant": false or "isIdentifiable": false, and describe clearly in "unclearReason" in ${language} what you observe and politely instruct the farmer to capture a sharp, well-lit photo of the affected plant foliage. NEVER GUESS OR HALLUCINATE A DISEASE IF THE IMAGE IS UNCLEAR OR NOT A PLANT.
+3. If the plant is clear and healthy, set "isCropOrPlant": true, "isIdentifiable": true, "isHealthy": true, "diseaseName": "Healthy Plant", "severity": "None (Healthy)".
+4. If a disease, pest damage, or deficiency is visible, identify the primary disease.
+5. Provide contextual recommendations specifically tuned to the farmer's geography and season.
 6. Give practical, step-by-step actions that a farmer can take immediately.`;
 
-    const prompt = `Please analyze this crop/plant leaf image carefully. Factor in the location (${locationText}) and season (${season || 'Monsoon/Post-Monsoon'}). Respond strictly according to the JSON schema.`;
+    const prompt = `Please analyze this crop/plant leaf image carefully. Factor in the location (${locationText}) and season (${season || 'Monsoon/Post-Monsoon'}). Output strictly in ${language} according to the JSON schema.`;
 
     const visionModels = ['gemini-3.8-flash', 'gemini-3.1-flash-lite', 'gemini-flash-latest'];
     let response: any = null;
@@ -230,6 +261,58 @@ CRITICAL INSTRUCTIONS:
       error: 'Failed to analyze crop image',
       details: error?.message || 'Internal error',
     });
+  }
+});
+
+// Real-time report translation endpoint when user switches language
+app.post('/api/translate-report', async (req, res) => {
+  try {
+    const { report, targetLanguage } = req.body;
+    if (!report || !targetLanguage) {
+      return res.status(400).json({ error: 'Report and targetLanguage are required' });
+    }
+
+    const prompt = `You are a world-class agricultural pathology translator.
+Translate this crop disease report strictly into ${targetLanguage} using its native script.
+Fields to translate into natural ${targetLanguage}:
+- cropName (e.g. கோதுமை (Wheat), गेहूं (Wheat))
+- diseaseName (e.g. இலை துரு நோய் (Leaf Rust))
+- severity (e.g. குறைவு, நடுத்தரம், அதிகம், தீவிரமானது / Low, Medium, High, Critical)
+- symptoms (translate all bullet strings into ${targetLanguage})
+- pestDamage (translate all strings into ${targetLanguage})
+- nutrientDeficiencies (translate all strings into ${targetLanguage})
+- causesAndContext (translate all strings into ${targetLanguage})
+- immediateActions (translate all actionable steps into simple ${targetLanguage})
+- preventionAdvice (translate all preventive tips into ${targetLanguage})
+- whenToContactExpert (translate into ${targetLanguage})
+- seasonalLocalizedNote (translate into ${targetLanguage})
+- unclearReason (translate into ${targetLanguage} if present)
+
+Keep all booleans (isCropOrPlant, isIdentifiable, isHealthy), numerical confidence, and JSON keys identical.
+Respond strictly in JSON.
+
+Input JSON:
+${JSON.stringify(report)}`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.1-flash-lite',
+      contents: prompt,
+      config: {
+        responseMimeType: 'application/json',
+        thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
+      },
+    });
+
+    if (response && response.text) {
+      const translated = JSON.parse(response.text);
+      translated.timestamp = new Date().toISOString();
+      return res.json(translated);
+    }
+
+    return res.json(report);
+  } catch (err: any) {
+    console.warn('Translate report error:', err);
+    return res.json(req.body.report || {});
   }
 });
 

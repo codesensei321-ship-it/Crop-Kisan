@@ -10,6 +10,7 @@ import {
   MapPin,
 } from 'lucide-react';
 import { CropAnalysisResult, LocationContext, VoiceLanguage } from '../types.ts';
+import { getTranslations } from '../utils/translations.ts';
 
 interface AnalysisReportProps {
   result: CropAnalysisResult;
@@ -28,6 +29,8 @@ export const AnalysisReport: React.FC<AnalysisReportProps> = ({
   onOpenVoiceAssistant,
   onScanAnother,
 }) => {
+  const t = getTranslations(selectedLanguage.id);
+
   // Unclear / Non-plant case
   if (!result.isIdentifiable || !result.isCropOrPlant) {
     return (
@@ -38,11 +41,10 @@ export const AnalysisReport: React.FC<AnalysisReportProps> = ({
 
         <div>
           <h2 className="text-lg font-extrabold text-slate-900">
-            Unclear Plant Photo
+            {t.unclearPhotoTitle}
           </h2>
           <p className="text-xs text-slate-500 mt-1 leading-relaxed max-w-xs mx-auto">
-            {result.unclearReason ||
-              'Could not clearly detect crop foliage or symptoms. The AI avoids guessing.'}
+            {result.unclearReason || t.unclearPhotoDesc}
           </p>
         </div>
 
@@ -52,10 +54,10 @@ export const AnalysisReport: React.FC<AnalysisReportProps> = ({
 
         <button
           onClick={onScanAnother}
-          className="w-full py-3.5 rounded-2xl bg-emerald-800 text-white font-bold text-xs flex items-center justify-center gap-2 active:scale-95 transition-transform"
+          className="w-full py-3.5 rounded-2xl bg-emerald-800 text-white font-bold text-xs flex items-center justify-center gap-2 active:scale-95 transition-transform cursor-pointer"
         >
           <RotateCcw className="w-4 h-4" />
-          Retake Photo
+          {t.retakePhoto}
         </button>
       </div>
     );
@@ -92,9 +94,9 @@ export const AnalysisReport: React.FC<AnalysisReportProps> = ({
           />
           <button
             onClick={onScanAnother}
-            className="absolute top-3 right-3 h-8 px-3 rounded-full bg-black/60 backdrop-blur-md text-white text-[11px] font-semibold flex items-center gap-1 active:scale-95"
+            className="absolute top-3 right-3 h-8 px-3 rounded-full bg-black/60 backdrop-blur-md text-white text-[11px] font-semibold flex items-center gap-1 active:scale-95 cursor-pointer hover:bg-black/80"
           >
-            <RotateCcw className="w-3 h-3" /> Scan New
+            <RotateCcw className="w-3 h-3" /> {t.scanNew}
           </button>
           {location && (
             <div className="absolute bottom-3 left-3 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md text-white text-[10px] flex items-center gap-1">
@@ -122,8 +124,8 @@ export const AnalysisReport: React.FC<AnalysisReportProps> = ({
           {/* Confidence bar matching Screen 3 */}
           <div className="mt-2 space-y-1">
             <div className="flex justify-between text-xs font-bold text-emerald-800">
-              <span>{confidenceScore}% Match</span>
-              <span className="text-[10px] font-normal text-slate-400">AI Confidence</span>
+              <span>{confidenceScore}% {t.matchScore}</span>
+              <span className="text-[10px] font-normal text-slate-400">{t.aiConfidence}</span>
             </div>
             <div className="w-full bg-emerald-50 h-2 rounded-full overflow-hidden border border-emerald-100">
               <div
@@ -134,13 +136,13 @@ export const AnalysisReport: React.FC<AnalysisReportProps> = ({
           </div>
         </div>
 
-        {/* "Talk to AI" Button matching mobile reference */}
+        {/* "Talk to AI" Button */}
         <button
           onClick={onOpenVoiceAssistant}
-          className="w-full py-3.5 rounded-2xl bg-emerald-800 hover:bg-emerald-900 text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-sm active:scale-98 transition-transform"
+          className="w-full py-3.5 rounded-2xl bg-emerald-800 hover:bg-emerald-900 text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-sm active:scale-98 transition-transform cursor-pointer"
         >
           <Mic className="w-4 h-4 text-emerald-300 animate-pulse" />
-          Talk to AI ({selectedLanguage.nativeName})
+          {t.talkToAi} ({selectedLanguage.nativeName})
           <ChevronRight className="w-4 h-4" />
         </button>
       </div>
@@ -151,7 +153,7 @@ export const AnalysisReport: React.FC<AnalysisReportProps> = ({
         <div className="bg-white rounded-2xl p-4 border border-emerald-100/70 shadow-sm space-y-2">
           <h3 className="text-xs font-extrabold text-slate-900 flex items-center gap-1.5">
             <Sparkles className="w-3.5 h-3.5 text-emerald-700" />
-            What To Do Now
+            {t.whatToDoNow}
           </h3>
           <ul className="space-y-1.5 text-xs text-slate-700">
             {result.immediateActions?.slice(0, 3).map((action, i) => (
@@ -167,7 +169,7 @@ export const AnalysisReport: React.FC<AnalysisReportProps> = ({
         <div className="bg-white rounded-2xl p-4 border border-emerald-100/70 shadow-sm space-y-2">
           <h3 className="text-xs font-extrabold text-slate-900 flex items-center gap-1.5">
             <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
-            Observed Symptoms
+            {t.observedSymptoms}
           </h3>
           <div className="flex flex-wrap gap-1.5">
             {result.symptoms?.map((s, i) => (
@@ -185,7 +187,7 @@ export const AnalysisReport: React.FC<AnalysisReportProps> = ({
         <div className="bg-white rounded-2xl p-4 border border-emerald-100/70 shadow-sm space-y-2">
           <h3 className="text-xs font-extrabold text-slate-900 flex items-center gap-1.5">
             <ShieldCheck className="w-3.5 h-3.5 text-teal-600" />
-            Prevention Advice
+            {t.preventionAdvice}
           </h3>
           <ul className="space-y-1.5 text-xs text-slate-700">
             {result.preventionAdvice?.slice(0, 2).map((p, i) => (
@@ -200,7 +202,7 @@ export const AnalysisReport: React.FC<AnalysisReportProps> = ({
 
       {/* 1-Line Disclaimer */}
       <p className="text-[10px] text-slate-400 text-center px-4 leading-tight">
-        Preliminary AI assessment. For severe outbreaks, consult local agricultural extension officers.
+        {t.disclaimer}
       </p>
     </div>
   );

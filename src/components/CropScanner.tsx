@@ -7,18 +7,23 @@ import {
   Scan,
   Sparkles,
   ArrowRight,
-  Search,
   CheckCircle2,
+  Lightbulb,
+  Sun,
+  Zap,
+  Leaf,
+  MapPin,
 } from 'lucide-react';
-import { LocationContext } from '../types.ts';
-import { SAMPLE_CROPS, SampleCrop, rasterizeSvgToPngDataUrl } from '../utils/sampleCrops.ts';
+import { LocationContext, VoiceLanguage } from '../types.ts';
 import { compressImage } from '../utils/imageCompress.ts';
+import { getTranslations } from '../utils/translations.ts';
 
 interface CropScannerProps {
   onAnalyze: (imageBase64: string, mimeType: string) => void;
   isAnalyzing: boolean;
   location: LocationContext | null;
   onRequestLocation: () => void;
+  selectedLanguage: VoiceLanguage;
 }
 
 export const CropScanner: React.FC<CropScannerProps> = ({
@@ -26,23 +31,22 @@ export const CropScanner: React.FC<CropScannerProps> = ({
   isAnalyzing,
   location,
   onRequestLocation,
+  selectedLanguage,
 }) => {
+  const t = getTranslations(selectedLanguage.id);
+
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [imageMimeType, setImageMimeType] = useState<string>('image/jpeg');
   const [isCameraActive, setIsCameraActive] = useState<boolean>(false);
   const [cameraFacing, setCameraFacing] = useState<'environment' | 'user'>('environment');
   const [cameraError, setCameraError] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState<string>('');
   const [isCompressing, setIsCompressing] = useState<boolean>(false);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
-  // Pure gallery / file manager input (NO capture="environment")
   const galleryInputRef = useRef<HTMLInputElement | null>(null);
-  // Native camera app fallback input
   const nativeCameraInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Stop camera stream cleanly
   const stopCamera = () => {
     if (mediaStreamRef.current) {
       mediaStreamRef.current.getTracks().forEach((track) => track.stop());
@@ -57,7 +61,6 @@ export const CropScanner: React.FC<CropScannerProps> = ({
     };
   }, []);
 
-  // Ensure video element gets the stream as soon as it mounts in the DOM
   useEffect(() => {
     if (isCameraActive && videoRef.current && mediaStreamRef.current) {
       videoRef.current.srcObject = mediaStreamRef.current;
@@ -65,7 +68,6 @@ export const CropScanner: React.FC<CropScannerProps> = ({
     }
   }, [isCameraActive]);
 
-  // Start device camera
   const startCamera = async (facing: 'environment' | 'user' = cameraFacing) => {
     stopCamera();
     setCameraError(null);
@@ -93,7 +95,7 @@ export const CropScanner: React.FC<CropScannerProps> = ({
       }
     } catch (err: any) {
       console.warn('Live camera stream error:', err);
-      setCameraError('Live viewfinder unavailable in this browser. Opening device camera.');
+      setCameraError(t.cameraUnavailable);
       setIsCameraActive(false);
       nativeCameraInputRef.current?.click();
     }
@@ -105,7 +107,6 @@ export const CropScanner: React.FC<CropScannerProps> = ({
     startCamera(nextFacing);
   };
 
-  // Capture photo from video feed and compress
   const capturePhoto = async () => {
     if (!videoRef.current) return;
     const video = videoRef.current;
@@ -134,7 +135,6 @@ export const CropScanner: React.FC<CropScannerProps> = ({
     }
   };
 
-  // Handle uploaded file from gallery/file manager and compress
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -162,20 +162,8 @@ export const CropScanner: React.FC<CropScannerProps> = ({
       reader.readAsDataURL(file);
     } finally {
       setIsCompressing(false);
-      // reset input value so user can select same file again if desired
       e.target.value = '';
     }
-  };
-
-  // Handle sample specimen click
-  const handleSelectSample = async (sample: SampleCrop) => {
-    if (!location) {
-      onRequestLocation();
-    }
-    const pngDataUrl = await rasterizeSvgToPngDataUrl(sample.dataUrl);
-    setPreviewImage(pngDataUrl);
-    setImageMimeType('image/png');
-    stopCamera();
   };
 
   const handleStartAnalysis = () => {
@@ -183,14 +171,9 @@ export const CropScanner: React.FC<CropScannerProps> = ({
     onAnalyze(previewImage, imageMimeType);
   };
 
-  const filteredSamples = SAMPLE_CROPS.filter((s) =>
-    s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    s.expectedCondition.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
   return (
     <div className="space-y-4">
-      {/* 1. File Manager / Photo Gallery Input (NO capture attribute: opens photo gallery/file manager) */}
+      {/* Hidden file input elements */}
       <input
         ref={galleryInputRef}
         type="file"
@@ -198,8 +181,6 @@ export const CropScanner: React.FC<CropScannerProps> = ({
         onChange={handleFileChange}
         className="hidden"
       />
-
-      {/* 2. Direct Device Camera Shutter Fallback Input */}
       <input
         ref={nativeCameraInputRef}
         type="file"
@@ -209,9 +190,9 @@ export const CropScanner: React.FC<CropScannerProps> = ({
         className="hidden"
       />
 
-      {/* Camera Live Viewfinder Feed */}
+      {/* Live Camera Viewfinder */}
       {isCameraActive && (
-        <div className="relative rounded-[32px] overflow-hidden bg-black aspect-[3/4] max-h-[560px] mx-auto shadow-lg flex flex-col justify-between">
+        <div className="relative rounded-[32px] overflow-hidden bg-black aspect-[3/4] max-h-[560px] mx-auto shadow-2xl flex flex-col justify-between border-2 border-emerald-500/40">
           <video
             ref={videoRef}
             autoPlay
@@ -220,57 +201,54 @@ export const CropScanner: React.FC<CropScannerProps> = ({
             className="absolute inset-0 w-full h-full object-cover"
           />
 
-          {/* Top header overlay */}
           <div className="relative z-10 p-4 flex items-center justify-between text-white">
             <button
               onClick={stopCamera}
-              className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white active:scale-95 transition-transform"
+              className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white active:scale-95 transition-transform cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
-            <span className="font-bold text-xs tracking-wide bg-black/40 backdrop-blur-md px-3.5 py-1.5 rounded-full">
-              Live Camera Feed
+            <span className="font-bold text-xs tracking-wide bg-black/50 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-white/10">
+              {t.liveCameraFeed}
             </span>
             <button
               onClick={toggleCameraFacing}
-              className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white active:scale-95 transition-transform"
+              className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white active:scale-95 transition-transform cursor-pointer"
             >
               <SwitchCamera className="w-5 h-5" />
             </button>
           </div>
 
-          {/* Center Scan Reticle (Neon green rounded brackets) */}
           <div className="relative z-10 flex-1 flex items-center justify-center pointer-events-none p-8">
             <div className="w-64 h-64 relative">
-              <div className="absolute top-0 left-0 w-12 h-12 border-t-4 border-l-4 border-[#86EFAC] rounded-tl-3xl shadow-[0_0_12px_rgba(134,239,172,0.6)]" />
-              <div className="absolute top-0 right-0 w-12 h-12 border-t-4 border-r-4 border-[#86EFAC] rounded-tr-3xl shadow-[0_0_12px_rgba(134,239,172,0.6)]" />
-              <div className="absolute bottom-0 left-0 w-12 h-12 border-b-4 border-l-4 border-[#86EFAC] rounded-bl-3xl shadow-[0_0_12px_rgba(134,239,172,0.6)]" />
-              <div className="absolute bottom-0 right-0 w-12 h-12 border-b-4 border-r-4 border-[#86EFAC] rounded-br-3xl shadow-[0_0_12px_rgba(134,239,172,0.6)]" />
+              <div className="absolute top-0 left-0 w-12 h-12 border-t-4 border-l-4 border-[#86EFAC] rounded-tl-3xl shadow-[0_0_16px_rgba(134,239,172,0.8)]" />
+              <div className="absolute top-0 right-0 w-12 h-12 border-t-4 border-r-4 border-[#86EFAC] rounded-tr-3xl shadow-[0_0_16px_rgba(134,239,172,0.8)]" />
+              <div className="absolute bottom-0 left-0 w-12 h-12 border-b-4 border-l-4 border-[#86EFAC] rounded-bl-3xl shadow-[0_0_16px_rgba(134,239,172,0.8)]" />
+              <div className="absolute bottom-0 right-0 w-12 h-12 border-b-4 border-r-4 border-[#86EFAC] rounded-br-3xl shadow-[0_0_16px_rgba(134,239,172,0.8)]" />
             </div>
           </div>
 
-          {/* Bottom Shutter Controls */}
-          <div className="relative z-10 p-6 flex flex-col items-center gap-3 bg-gradient-to-t from-black/70 to-transparent">
+          <div className="relative z-10 p-6 flex flex-col items-center gap-3 bg-gradient-to-t from-black/80 via-black/40 to-transparent">
             <button
               onClick={capturePhoto}
-              className="w-18 h-18 rounded-full border-4 border-white flex items-center justify-center bg-white/30 backdrop-blur-sm active:scale-90 transition-transform cursor-pointer"
+              className="w-20 h-20 rounded-full border-4 border-white flex items-center justify-center bg-white/30 backdrop-blur-sm active:scale-90 transition-transform cursor-pointer shadow-lg"
             >
-              <div className="w-13 h-13 rounded-full bg-white" />
+              <div className="w-15 h-15 rounded-full bg-white shadow-inner" />
             </button>
             <button
               onClick={() => {
                 stopCamera();
                 galleryInputRef.current?.click();
               }}
-              className="text-xs text-white/80 hover:text-white underline"
+              className="text-xs text-white/90 hover:text-white underline cursor-pointer font-medium"
             >
-              Or upload from photo gallery
+              {t.orUploadGallery}
             </button>
           </div>
         </div>
       )}
 
-      {/* Analyzing or Compressing Loading State */}
+      {/* Analyzing / Compressing Loading State */}
       {(isAnalyzing || isCompressing) && (
         <div className="bg-white rounded-[32px] p-8 text-center shadow-sm border border-emerald-100 space-y-4">
           <div className="w-16 h-16 mx-auto rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center">
@@ -278,12 +256,12 @@ export const CropScanner: React.FC<CropScannerProps> = ({
           </div>
           <div>
             <h3 className="font-extrabold text-base text-slate-900">
-              {isCompressing ? 'Optimizing Photo...' : 'Identifying Crop Condition...'}
+              {isCompressing ? t.optimizingPhoto : t.identifyingCondition}
             </h3>
             <p className="text-xs text-slate-500 mt-1">
               {isCompressing
-                ? 'Compressing for instant upload'
-                : `Matching symptoms & ${location?.season?.split('(')[0] || 'climate'}`}
+                ? t.compressingDesc
+                : `${t.matchingDesc} (${location?.season?.split('(')[0] || ''})`}
             </p>
           </div>
           <div className="w-48 mx-auto bg-slate-100 rounded-full h-1.5 overflow-hidden">
@@ -307,7 +285,7 @@ export const CropScanner: React.FC<CropScannerProps> = ({
 
             <button
               onClick={() => setPreviewImage(null)}
-              className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/60 text-white flex items-center justify-center text-xs"
+              className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/60 text-white flex items-center justify-center text-xs cursor-pointer hover:bg-black/80"
             >
               <X className="w-4 h-4" />
             </button>
@@ -315,57 +293,55 @@ export const CropScanner: React.FC<CropScannerProps> = ({
 
           <div className="flex items-center justify-between text-xs text-slate-500 px-1">
             <span className="flex items-center gap-1 text-emerald-800 font-medium">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Photo ready &amp; optimized
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> {t.photoReady}
             </span>
             <span className="font-semibold text-slate-700">
-              {location?.district || location?.state || 'Auto Location'}
+              {location?.district || location?.state || t.autoLocation}
             </span>
           </div>
 
           <button
             onClick={handleStartAnalysis}
-            className="w-full py-4 rounded-2xl bg-emerald-800 hover:bg-emerald-900 text-white font-extrabold text-sm flex items-center justify-center gap-2 shadow-md active:scale-98 transition-transform"
+            className="w-full py-4 rounded-2xl bg-emerald-800 hover:bg-emerald-900 text-white font-extrabold text-sm flex items-center justify-center gap-2 shadow-md active:scale-98 transition-transform cursor-pointer"
           >
             <Sparkles className="w-4 h-4" />
-            Analyze Crop
+            {t.analyzeCrop}
             <ArrowRight className="w-4 h-4" />
           </button>
         </div>
       )}
 
-      {/* Main Home Screen: Clean AI Plant Scan Card Only (As requested) */}
+      {/* Main Home Screen: Elevated, Clean, Tactile Mobile Experience */}
       {!previewImage && !isCameraActive && !isAnalyzing && !isCompressing && (
         <div className="space-y-4">
-          {/* Headline */}
-          <div className="px-1">
-            <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight leading-tight">
-              What Are We<br />
-              <span className="text-emerald-700">Diagnosing</span> Today?
-            </h2>
+          {/* Top Live Status & Regional Badge */}
+          <div className="flex items-center justify-between px-1">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100/80 text-emerald-900 text-[11px] font-bold border border-emerald-200/60 shadow-2xs">
+              <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse" />
+              {t.onlineBadge}
+            </span>
+
+            {location && (
+              <span className="text-[11px] text-slate-600 font-medium flex items-center gap-1">
+                <MapPin className="w-3 h-3 text-emerald-700" />
+                {location.district || location.state}
+              </span>
+            )}
           </div>
 
-          {/* Search Bar */}
-          <div className="relative">
-            <Search className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search crops, problems..."
-              className="w-full h-12 bg-white rounded-2xl pl-11 pr-11 text-xs text-slate-800 placeholder-slate-400 border border-emerald-100/60 shadow-sm focus:outline-none focus:border-emerald-600"
-            />
-            <button
-              onClick={() => startCamera('environment')}
-              className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center absolute right-2.5 top-1/2 -translate-y-1/2"
-              title="Camera Scan"
-            >
-              <Scan className="w-4 h-4" />
-            </button>
+          {/* Headline */}
+          <div className="px-1 pt-0.5">
+            <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight leading-tight">
+              {t.diagnosingHeading}<br />
+              <span className="text-emerald-700 underline decoration-emerald-300 decoration-wavy underline-offset-4">
+                {t.diagnosingHighlight}
+              </span>
+            </h2>
           </div>
 
           {/* Camera Error Alert if live stream failed */}
           {cameraError && (
-            <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl text-amber-800 text-xs flex items-center justify-between">
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl text-amber-800 text-xs flex items-center justify-between shadow-2xs">
               <span>{cameraError}</span>
               <button
                 onClick={() => setCameraError(null)}
@@ -376,88 +352,75 @@ export const CropScanner: React.FC<CropScannerProps> = ({
             </div>
           )}
 
-          {/* ONLY AI Plant Scan Card (With direct camera access + gallery option) */}
-          <div className="bg-white rounded-[28px] p-5 border border-emerald-100/80 shadow-sm space-y-4 relative overflow-hidden">
-            <div className="flex items-center justify-between gap-3">
-              <div className="space-y-1 max-w-[180px]">
-                <h3 className="font-extrabold text-base text-slate-900 leading-snug">
-                  AI Plant Scan
-                </h3>
-                <p className="text-[11px] text-slate-500 leading-snug">
-                  Snap leaf with camera to diagnose disease in seconds
-                </p>
+          {/* High-Impact AI Plant Scan Hero Card */}
+          <div className="bg-white rounded-[32px] p-5 sm:p-6 border border-emerald-100 shadow-sm space-y-5 relative overflow-hidden">
+            {/* Viewfinder Graphic Centerpiece */}
+            <div className="relative rounded-2xl bg-gradient-to-b from-emerald-50/70 to-emerald-100/40 border border-emerald-100 p-6 flex flex-col items-center justify-center text-center overflow-hidden">
+              {/* Corner target reticles */}
+              <div className="absolute top-2.5 left-2.5 w-4 h-4 border-t-2 border-l-2 border-emerald-600 rounded-tl-sm" />
+              <div className="absolute top-2.5 right-2.5 w-4 h-4 border-t-2 border-r-2 border-emerald-600 rounded-tr-sm" />
+              <div className="absolute bottom-2.5 left-2.5 w-4 h-4 border-b-2 border-l-2 border-emerald-600 rounded-bl-sm" />
+              <div className="absolute bottom-2.5 right-2.5 w-4 h-4 border-b-2 border-r-2 border-emerald-600 rounded-br-sm" />
+
+              <div className="w-16 h-16 rounded-full bg-emerald-700 text-white flex items-center justify-center shadow-md mb-2 relative">
+                <Leaf className="w-8 h-8 text-emerald-200 animate-pulse" />
+                <span className="absolute -top-1 -right-1 w-5 h-5 bg-emerald-500 rounded-full border-2 border-white flex items-center justify-center">
+                  <Scan className="w-3 h-3 text-white" />
+                </span>
               </div>
 
-              {/* Plant illustration with scan brackets */}
-              <div className="w-24 h-24 rounded-2xl bg-emerald-50/60 border border-emerald-100 p-1.5 flex items-center justify-center relative shrink-0">
-                <img
-                  src={SAMPLE_CROPS[0].dataUrl}
-                  alt="Plant preview"
-                  className="w-full h-full object-contain"
-                />
-                <div className="absolute inset-1 pointer-events-none">
-                  <div className="absolute top-0 left-0 w-2.5 h-2.5 border-t-2 border-l-2 border-emerald-500 rounded-tl-sm" />
-                  <div className="absolute top-0 right-0 w-2.5 h-2.5 border-t-2 border-r-2 border-emerald-500 rounded-tr-sm" />
-                  <div className="absolute bottom-0 left-0 w-2.5 h-2.5 border-b-2 border-l-2 border-emerald-500 rounded-bl-sm" />
-                  <div className="absolute bottom-0 right-0 w-2.5 h-2.5 border-b-2 border-r-2 border-emerald-500 rounded-br-sm" />
-                </div>
-              </div>
+              <h3 className="font-extrabold text-base text-slate-900 leading-snug">
+                {t.aiPlantScan}
+              </h3>
+              <p className="text-xs text-slate-600 mt-1 max-w-[240px] leading-relaxed">
+                {t.aiPlantScanDesc}
+              </p>
             </div>
 
-            {/* Direct Camera Actions */}
-            <div className="space-y-2 pt-1">
+            {/* Direct Action Buttons */}
+            <div className="space-y-2.5">
               <button
                 onClick={() => startCamera('environment')}
-                className="w-full py-3.5 px-4 rounded-2xl bg-emerald-800 hover:bg-emerald-900 text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-sm active:scale-98 transition-transform cursor-pointer"
+                className="w-full py-4 px-4 rounded-2xl bg-emerald-800 hover:bg-emerald-900 text-white font-extrabold text-sm flex items-center justify-center gap-2.5 shadow-md active:scale-98 transition-all cursor-pointer"
               >
-                <Camera className="w-4 h-4" />
-                Open Camera &amp; Scan
+                <Camera className="w-5 h-5 text-emerald-300" />
+                {t.openCamera}
               </button>
 
               <button
                 onClick={() => galleryInputRef.current?.click()}
-                className="w-full py-2.5 px-4 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                className="w-full py-3.5 px-4 rounded-xl bg-slate-50 hover:bg-emerald-50/60 text-slate-700 font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer border border-slate-200/80 active:scale-98"
               >
-                <ImageIcon className="w-3.5 h-3.5 text-slate-500" />
-                Upload from Photo Gallery
+                <ImageIcon className="w-4 h-4 text-emerald-700" />
+                {t.uploadGallery}
               </button>
+            </div>
+
+            {/* 3 Visual Guidance Pills */}
+            <div className="grid grid-cols-3 gap-1.5 pt-1 border-t border-slate-100 text-[10px] text-slate-600 font-semibold text-center">
+              <div className="flex flex-col items-center gap-1 p-1 rounded-lg bg-slate-50/60">
+                <Leaf className="w-3.5 h-3.5 text-emerald-600" />
+                <span className="truncate w-full">{t.clearLeafTip}</span>
+              </div>
+              <div className="flex flex-col items-center gap-1 p-1 rounded-lg bg-slate-50/60">
+                <Sun className="w-3.5 h-3.5 text-amber-500" />
+                <span className="truncate w-full">{t.sunlightTip}</span>
+              </div>
+              <div className="flex flex-col items-center gap-1 p-1 rounded-lg bg-slate-50/60">
+                <Zap className="w-3.5 h-3.5 text-emerald-600" />
+                <span className="truncate w-full">{t.instantAdviceTip}</span>
+              </div>
             </div>
           </div>
 
-          {/* Quick Test Specimens */}
-          <div className="space-y-2 pt-1">
-            <div className="flex items-center justify-between px-1">
-              <h3 className="font-extrabold text-xs text-slate-900">
-                Quick Test Specimens
-              </h3>
-              <span className="text-[10px] text-emerald-700 font-semibold">1-Tap Test</span>
+          {/* Friendly Field Tip Card */}
+          <div className="p-3.5 bg-white/80 backdrop-blur-xs rounded-2xl border border-emerald-100/80 flex items-start gap-2.5 text-xs text-slate-700 shadow-2xs">
+            <div className="w-6 h-6 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center shrink-0 mt-0.5">
+              <Lightbulb className="w-3.5 h-3.5" />
             </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              {filteredSamples.map((sample) => (
-                <button
-                  key={sample.id}
-                  onClick={() => handleSelectSample(sample)}
-                  className="bg-white rounded-2xl p-2.5 border border-emerald-100/80 shadow-sm text-left flex items-center gap-2.5 active:scale-98 transition-transform group cursor-pointer"
-                >
-                  <div className="w-11 h-11 rounded-xl bg-slate-900 overflow-hidden shrink-0">
-                    <img
-                      src={sample.dataUrl}
-                      alt={sample.name}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                    />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="font-bold text-xs text-slate-900 truncate">
-                      {sample.name}
-                    </div>
-                    <div className="text-[10px] text-slate-500 truncate">
-                      {sample.expectedCondition.split('(')[0]}
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
+            <p className="leading-relaxed text-[11px] text-slate-600">
+              {t.homeTip}
+            </p>
           </div>
         </div>
       )}

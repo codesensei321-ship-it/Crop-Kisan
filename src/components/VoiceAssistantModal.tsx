@@ -21,6 +21,7 @@ import {
   TranscriptEntry,
 } from '../types.ts';
 import { SUPPORTED_LANGUAGES } from '../utils/languages.ts';
+import { getTranslations } from '../utils/translations.ts';
 
 interface VoiceAssistantModalProps {
   isOpen: boolean;
@@ -39,6 +40,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
   selectedLanguage,
   onSelectLanguage,
 }) => {
+  const t = getTranslations(selectedLanguage.id);
   const [isListening, setIsListening] = useState<boolean>(false);
   const [isAiSpeaking, setIsAiSpeaking] = useState<boolean>(false);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
@@ -453,17 +455,17 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
             {isProcessing ? (
               <>
                 <Loader2 className="w-3.5 h-3.5 text-emerald-700 animate-spin" />
-                Thinking...
+                {t.replying}
               </>
             ) : isAiSpeaking ? (
               <>
                 <Volume2 className="w-3.5 h-3.5 text-emerald-700 animate-pulse" />
-                AI Speaking (Tap mic to interrupt)...
+                {t.aiSpeaking}
               </>
             ) : isListening ? (
               <>
                 <Radio className="w-3.5 h-3.5 text-green-600 animate-pulse" />
-                Listening... (Hands-free conversation)
+                {t.listeningHandsFree}
               </>
             ) : (
               <>
@@ -549,10 +551,10 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
             }`}
             title={
               isAiSpeaking
-                ? 'Tap to interrupt AI'
+                ? t.tapToInterrupt
                 : isListening
-                ? 'Tap to pause hands-free conversation'
-                : 'Tap to speak hands-free'
+                ? t.tapToPause
+                : t.tapToSpeak
             }
           >
             {isListening ? (
@@ -576,7 +578,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
               type="text"
               value={textInput}
               onChange={(e) => setTextInput(e.target.value)}
-              placeholder={isListening ? 'Listening hands-free...' : `Ask in ${selectedLanguage.nativeName}...`}
+              placeholder={isListening ? t.listeningHandsFree : t.askPlaceholder}
               className="flex-1 bg-transparent text-xs text-slate-800 focus:outline-none placeholder-slate-400"
             />
             <button
@@ -594,7 +596,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
             className="h-9 px-3 rounded-full bg-slate-100 hover:bg-red-50 hover:text-red-700 text-slate-600 text-xs font-semibold cursor-pointer flex items-center gap-1 transition-colors"
           >
             <PhoneOff className="w-3.5 h-3.5" />
-            End
+            {t.endCall}
           </button>
         </div>
       </div>
